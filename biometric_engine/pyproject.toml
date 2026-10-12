@@ -1,0 +1,60 @@
+[project]
+name = "biometric-engine"
+version = "0.1.0"
+description = "Facial biometric enrollment and verification service (100% open source)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.109",
+    "uvicorn[standard]>=0.27",
+    "sqlalchemy>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "redis>=5.0",
+    "pydantic-settings>=2.1",
+    "structlog>=24.1",
+    "prometheus-client>=0.20",
+    "python-jose[cryptography]>=3.3",
+    "passlib[bcrypt]>=1.7",
+    "python-multipart>=0.0.6",
+    "slowapi>=0.1.9",
+    "insightface>=0.7",
+    "onnxruntime>=1.17",
+    "opencv-python-headless>=4.9",
+    "mediapipe>=0.10",
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "httpx>=0.27",
+    "greenlet>=3.5.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.12",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true

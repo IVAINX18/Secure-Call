@@ -4,7 +4,7 @@
 
 | Workflow | Trigger | What it does |
 | -------- | ------- | ------------ |
-| `biometric-engine CI` (`.github/workflows/ci.yml`) | push to `main`, any `pull_request` | `lint` (ruff + mypy), `test` (pytest, coverage gate `--cov-fail-under=90`), `build` (`docker build`) |
+| `biometric-engine CI` (`.github/workflows/ci.yml`) | push to `main`, any `pull_request` | `lint` (ruff + mypy), `test` (pytest, coverage gate `--cov-fail-under=95`), `build` (`docker build`) |
 | `biometric-engine deploy` (`.github/workflows/deploy.yml`) | `biometric-engine CI` completes on `main` with success | POSTs the Render deploy hook; **skips gracefully** when `RENDER_DEPLOY_HOOK` is unset |
 
 The leftover `.github/workflows/jekyll-gh-pages.yml` is unrelated (stale

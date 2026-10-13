@@ -67,12 +67,18 @@ jobs:
           --health-retries 10
     env:
       # Pydantic Settings reads process env first, so these override .env.
-      # conftest derives the test DB by swapping the path to /biometric_test.
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/biometric
+      # The postgres service provisions ONLY biometric_test (POSTGRES_DB), so
+      # the app-level URL must name it too; conftest's path swap to
+      # /biometric_test is then a no-op.
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/biometric_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: ci-only-test-secret-not-for-production
     steps:
       - uses: actions/checkout@v4
+      - name: Install system libs for MediaPipe (EGL/GL)
+        # MediaPipe Tasks loads native GLES/EGL at runtime via ctypes; the
+        # GH ubuntu runner lacks them (same set the API image installs).
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libegl1 libgles2
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -85,9 +91,9 @@ jobs:
           pip install -r requirements.txt
           pip install "pytest>=8.0" "pytest-cov>=5.0" "pytest-asyncio>=0.23" "pytest-mock>=3.12" "ruff>=0.4" "mypy>=1.10"
       - name: pytest with coverage gate
-        # Floor measured at 93% on 2026-10-13 (71 passed); gate set to 90
-        # per the Fase 10 plan (raise toward 100 in Fase 11).
-        run: python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=90
+        # Floor measured at 100% on 2026-10-13 (106 passed, Fase 11:
+        # greenlet-mode tracing fix + 32 gap tests); gate set to 95.
+        run: python -m pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=95
 
   build:
     name: build (docker)

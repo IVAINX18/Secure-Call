@@ -105,9 +105,15 @@ but is lazy; the model bundle (~3.6 MB) auto-downloads to
   ~14.9 deg head tilt crushes the pose term). Smoke tests must use
   `tests/fixtures/images/face_leveled.jpg` (derotated variant, quality ~0.76).
   Recipe in `tests/fixtures/images/SOURCES.md`.
-- **Coverage reporting quirk**: coverage.py under-reports slowapi-decorated
-  endpoint lines (they execute — curl proves the exact detail strings — but
-  report as missed). Treat endpoint coverage as informational.
+- **Coverage tracing needs greenlet mode**: SQLAlchemy's async driver switches
+  greenlets on every DB await, and without greenlet-aware tracing coverage.py's
+  C tracer loses frame association across those switches. Fase 11 proved this
+  with evidence: the identical suite reported enroll.py at 83% (lines 62-69
+  "missed" although the 400 responses proved they execute) plus phantom line
+  numbers from other files, while `concurrency = ["greenlet"]` in
+  `pyproject.toml` reports the true 100% with zero phantoms. An independent
+  `sys.settrace` probe confirmed the handler lines execute. Do not remove the
+  `[tool.coverage.run]` setting or endpoint coverage will falsely regress.
 - **Models volume for prod**: models download into container-local caches on
   first use (~20 MB + 60 s MediaPipe init). For production, mount persistent
   volumes for `~/.insightface` and `~/.cache/mediapipe` (or bake the bundles

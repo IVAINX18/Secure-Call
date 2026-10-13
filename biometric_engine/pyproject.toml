@@ -58,3 +58,13 @@ line-length = 100
 python_version = "3.11"
 strict = false
 ignore_missing_imports = true
+
+[tool.coverage.run]
+# SQLAlchemy's async driver switches greenlets on every DB await. Without
+# greenlet-aware tracing, coverage.py's C tracer loses frame association
+# across those switches: endpoint except-handler lines that provably execute
+# (HTTP 400 responses observed) report as missed, and phantom line numbers
+# from other files get attributed to endpoint modules. Verified in Fase 11:
+# plain mode reported enroll.py 83% with 62-69 missed; greenlet mode reports
+# 100% for the identical suite with zero phantoms.
+concurrency = ["greenlet"]

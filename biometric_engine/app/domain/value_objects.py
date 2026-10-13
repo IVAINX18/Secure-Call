@@ -68,7 +68,12 @@ class Embedding:
         norm_b = float(np.linalg.norm(b))
         if norm_a == 0.0 or norm_b == 0.0:
             raise ValueError("Cannot compute similarity of a zero embedding vector.")
-        return float(np.dot(a, b) / (norm_a * norm_b))
+        value = float(np.dot(a, b) / (norm_a * norm_b))
+        # float32 rounding (dot/norm evaluation order varies by BLAS/CPU)
+        # can push identical vectors ~1 ULP outside [-1, 1]; clamp so the
+        # documented contract holds on every platform and API confidence
+        # never exceeds 1.0.
+        return float(np.clip(value, -1.0, 1.0))
 
 
 @dataclass(frozen=True)

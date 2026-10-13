@@ -1,0 +1,63 @@
+# Fase 10: Render Blueprint for the biometric engine.
+#
+# Onboarding: Render Dashboard > New > Blueprint > select this repo.
+# Render provisions all three resources and wires DATABASE_URL / REDIS_URL /
+# JWT_SECRET_KEY into the web service automatically, so the only GitHub
+# secret needed for CD is the deploy hook (see
+# biometric_engine/docs/deployment.md).
+#
+# Spec reference: https://render.com/docs/blueprint-spec
+# Caveats:
+# - postgresMajorVersion "15" is pinned per the Fase 10 plan; if Render
+#   stops offering 15 for new instances at sync time, bump to the oldest
+#   supported major and note it in docs/deployment.md.
+# - Render Key Value is Redis-protocol compatible (7.x line); there is no
+#   version pin field for keyvalue services.
+# - All resources use free plans; raise them for production load.
+services:
+  - type: web
+    name: biometric-engine
+    runtime: docker
+    dockerfilePath: biometric_engine/docker/Dockerfile
+    dockerContext: biometric_engine
+    plan: free
+    healthCheckPath: /api/v1/health
+    # Releases go through .github/workflows/deploy.yml (deploy hook, after
+    # CI green on main); keep auto-deploy off so a push alone never ships.
+    autoDeployTrigger: off
+    buildFilter:
+      paths:
+        - biometric_engine/**
+        - render.yaml
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: biometric-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: biometric-redis
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: BIOMETRIC_THRESHOLD
+        value: "0.85"
+      - key: LIVENESS_THRESHOLD
+        value: "0.7"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+  - type: keyvalue
+    name: biometric-redis
+    plan: free
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+
+databases:
+  - name: biometric-postgres
+    databaseName: biometric
+    user: biometric
+    plan: free
+    postgresMajorVersion: "15"

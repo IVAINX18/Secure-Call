@@ -32,7 +32,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return the cached application settings singleton."""
-    return Settings()
+    # Required fields are injected from env/.env by pydantic-settings (mypy 2.x).
+    return Settings()  # type: ignore[call-arg]
 
 
 settings = get_settings()

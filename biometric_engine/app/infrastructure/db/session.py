@@ -20,6 +20,23 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 _engine_loop: asyncio.AbstractEventLoop | None = None
 
+_PLAIN_POSTGRES_SCHEME = "postgresql://"
+_ASYNCPG_SCHEME = "postgresql+asyncpg://"
+
+
+def normalize_database_url(url: str) -> str:
+    """Rewrite a driver-less postgres URL to the asyncpg dialect.
+
+    Render Blueprints inject DATABASE_URL as a plain ``postgresql://``
+    connectionString, but ``create_async_engine`` needs an async driver.
+    URLs that already name a driver (``postgresql+asyncpg://``,
+    ``sqlite+aiosqlite://``, ...) pass through untouched, so local, CI,
+    and test configs never change meaning.
+    """
+    if url.startswith(_PLAIN_POSTGRES_SCHEME):
+        return _ASYNCPG_SCHEME + url[len(_PLAIN_POSTGRES_SCHEME):]
+    return url
+
 
 def _running_loop() -> asyncio.AbstractEventLoop | None:
     """Return the running loop, or None when called outside one."""
@@ -40,7 +57,9 @@ def get_engine() -> AsyncEngine:
     if _engine is None or (
         running is not None and _engine_loop is not None and _engine_loop is not running
     ):
-        _engine = create_async_engine(get_settings().DATABASE_URL, pool_pre_ping=True)
+        _engine = create_async_engine(
+            normalize_database_url(get_settings().DATABASE_URL), pool_pre_ping=True
+        )
         _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
         _engine_loop = running
     return _engine

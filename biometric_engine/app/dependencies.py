@@ -1,5 +1,7 @@
 """Shared FastAPI dependencies: DB session, Redis client, current user."""
 
+from collections.abc import AsyncGenerator
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +36,7 @@ def get_liveness_detector() -> MediaPipeLivenessDetector:
     return _liveness_detector
 
 
-async def get_db_session() -> AsyncSession:
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield a request-scoped async DB session.
 
     Unit of work: commit when the request succeeds, roll back when it

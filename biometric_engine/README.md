@@ -14,6 +14,8 @@ flows, and design decisions.
 - ~2 GB free disk for the API image; ~20 MB download on first run
   (InsightFace model bundle ~16 MB, MediaPipe task bundle ~3.6 MB)
 
+Deployment (CI + Render): see [docs/deployment.md](./docs/deployment.md).
+
 ## Setup
 
 1. Copy the environment template and adjust values:

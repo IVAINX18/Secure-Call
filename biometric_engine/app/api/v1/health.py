@@ -3,6 +3,7 @@
 import asyncio
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +30,8 @@ async def _check_redis(redis_client: object) -> tuple[str, str | None]:
     """Run PING with a timeout; return (status, error)."""
     try:
         await asyncio.wait_for(
-            redis_client.ping(),  # type: ignore[union-attr]
+            # Redis client is injected as object (loop-aware factory); ping exists at runtime.
+            redis_client.ping(),  # type: ignore[attr-defined]
             timeout=_CHECK_TIMEOUT_SECONDS,
         )
         return "ok", None
@@ -41,10 +43,8 @@ async def _check_redis(redis_client: object) -> tuple[str, str | None]:
 async def health(
     session: AsyncSession = Depends(get_db_session),  # noqa: B008 - FastAPI idiom
     redis_client: object = Depends(get_redis),
-) -> dict:
+) -> JSONResponse:
     """Return 200 healthy when DB and Redis are reachable, else 503 degraded."""
-    from fastapi.responses import JSONResponse
-
     db_status, db_error = await _check_db(session)
     redis_status, redis_error = await _check_redis(redis_client)
     healthy = db_status == "ok" and redis_status == "ok"

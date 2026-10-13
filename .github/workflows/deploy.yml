@@ -1,0 +1,32 @@
+# Fase 10: deploy the biometric engine to Render after CI passes on main.
+#
+# Triggered by completion of the "biometric-engine CI" workflow (see
+# .github/workflows/ci.yml), main branch only, and only when CI succeeded.
+# The Render deploy hook is user-owned: when the RENDER_DEPLOY_HOOK secret
+# is absent the job SKIPS (exit 0, never fails) and points at
+# biometric_engine/docs/deployment.md for setup.
+name: biometric-engine deploy
+
+on:
+  workflow_run:
+    workflows: ["biometric-engine CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  render:
+    name: deploy to Render
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK is not set - skipping Render deploy."
+            echo "Setup instructions: biometric_engine/docs/deployment.md"
+            exit 0
+          fi
+          curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
+          echo "Render deploy hook triggered."

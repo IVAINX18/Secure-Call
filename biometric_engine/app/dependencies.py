@@ -8,6 +8,7 @@ from app.core.security import TokenError, decode_jwt
 from app.domain.services import BiometricService
 from app.infrastructure.adapters.factory import get_biometric_adapter
 from app.infrastructure.cache.client import create_redis_client
+from app.infrastructure.cache.redis_cache import RedisCache
 from app.infrastructure.db.repository import (
     AuditLogRepository,
     EmbeddingRepository,
@@ -111,12 +112,25 @@ async def get_current_user(
     return str(subject)
 
 
-def get_biometric_service(
+async def get_cache(
+    redis_client: object = Depends(get_redis),
+) -> RedisCache:
+    """Build a RedisCache on the request-loop Redis client.
+
+    Built per request (never cached across event loops): the underlying
+    client is loop-bound and recreated by ``create_redis_client`` when
+    the loop changes.
+    """
+    return RedisCache(redis_client)
+
+
+async def get_biometric_service(
     user_repo: UserRepository = Depends(get_user_repository),  # noqa: B008
     embedding_repo: EmbeddingRepository = Depends(get_embedding_repository),  # noqa: B008
     audit_repo: AuditLogRepository = Depends(get_audit_log_repository),  # noqa: B008
+    cache: RedisCache = Depends(get_cache),  # noqa: B008 - FastAPI idiom
 ) -> BiometricService:
-    """Build a BiometricService wired to the adapter, repos, and detector."""
+    """Build a BiometricService wired to the adapter, repos, detector, cache."""
     from app.config import get_settings
 
     return BiometricService(
@@ -126,4 +140,5 @@ def get_biometric_service(
         audit_repo=audit_repo,
         liveness_detector=get_liveness_detector(),
         settings=get_settings(),
+        cache=cache,
     )

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str
     BIOMETRIC_THRESHOLD: float = 0.85
     LIVENESS_THRESHOLD: float = 0.7
+    EMBEDDING_CACHE_TTL: int = 300
     LOG_LEVEL: str = "INFO"
     CORS_ORIGINS: str = "http://localhost:5173"
 

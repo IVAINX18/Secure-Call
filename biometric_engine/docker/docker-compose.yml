@@ -4,10 +4,16 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8000:8000"
+      # Host port is env-overridable for tenants sharing a host.
+      # Canonical default 8000; local QA uses 8800 (host 8000 is taken).
+      - "${API_PORT:-8000}:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://biometric:biometric@postgres:5432/biometric}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Container-internal URLs are hardcoded: service DNS names only exist
+      # inside the compose network. A host-oriented .env (localhost URLs for
+      # local dev) must never leak in here — dev-start.sh forwards .env only
+      # for the host-level knobs below (ports, secrets, thresholds).
+      DATABASE_URL: postgresql+asyncpg://biometric:biometric@postgres:5432/biometric
+      REDIS_URL: redis://redis:6379/0
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-to-a-long-random-secret}
       BIOMETRIC_THRESHOLD: ${BIOMETRIC_THRESHOLD:-0.85}
       LIVENESS_THRESHOLD: ${LIVENESS_THRESHOLD:-0.7}
@@ -18,6 +24,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # stdlib-only probe: no curl in python:3.11-slim.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    volumes:
+      # Optional: test fixtures available inside the container for smoke QA.
+      - ../tests/fixtures:/fixtures:ro
 
   postgres:
     image: postgres:15-alpine
@@ -26,7 +42,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-biometric}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-biometric}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -39,7 +55,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

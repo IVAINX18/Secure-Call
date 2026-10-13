@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { LogoProvider } from './contexts/LogoContext';
@@ -11,6 +10,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import VideoCall from './pages/VideoCall';
 import Settings from './pages/Settings';
+import BiometricEnroll from './pages/BiometricEnroll';
+import BiometricVerify from './pages/BiometricVerify';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -25,6 +26,7 @@ function App() {
                 <Route path="/" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/login/biometric-verify" element={<BiometricVerify />} />
                 <Route element={<Layout />}>
                   <Route 
                     path="/dashboard" 
@@ -33,6 +35,14 @@ function App() {
                         <Dashboard />
                       </ProtectedRoute>
                     } 
+                  />
+                  <Route
+                    path="/settings/biometric-enroll"
+                    element={
+                      <ProtectedRoute>
+                        <BiometricEnroll />
+                      </ProtectedRoute>
+                    }
                   />
                   <Route 
                     path="/video-call/:roomId?" 

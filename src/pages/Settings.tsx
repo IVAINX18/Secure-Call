@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import LogoUploader from '../components/LogoUploader';
 import Logo from '../components/Logo';
-import { ArrowLeft, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, Settings as SettingsIcon, ScanFace } from 'lucide-react';
 
 const Settings: React.FC = () => {
   return (
@@ -34,6 +34,17 @@ const Settings: React.FC = () => {
                 <Logo className="mb-4" />
               </div>
               <LogoUploader />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Biometrics</h3>
+              <Link
+                to="/settings/biometric-enroll"
+                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              >
+                <ScanFace className="h-4 w-4 mr-2" />
+                Enroll your face
+              </Link>
             </div>
           </div>
         </div>

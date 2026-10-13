@@ -7,6 +7,15 @@ FastAPI, PostgreSQL, Redis. No cloud biometric APIs.
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the hexagonal layout, request
 flows, and design decisions.
 
+## Frontend integration
+
+The Secure-Call React app calls this engine directly: `/settings/biometric-enroll`
+(protected, enroll + quality feedback) and `/login/biometric-verify` (public,
+verify + liveness). Both pages take a Bearer JWT minted with this service's
+`JWT_SECRET_KEY` (see Authentication below); local dev points at
+`VITE_BIOMETRIC_API_URL=http://localhost:8800` and the CSP `connect-src`
+allows that origin.
+
 ## Requirements
 
 - Python 3.11 (managed via [uv](https://docs.astral.sh/uv/))

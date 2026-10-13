@@ -43,7 +43,12 @@ class UserRepositoryPort(Protocol):
         """Return the user row for ``user_id``, or None when missing."""
         ...
 
-    async def create(self, email: str, password_hash: str) -> object:
+    async def create(
+        self,
+        email: str,
+        password_hash: str,
+        user_id: uuid.UUID | None = None,
+    ) -> object:
         """Insert a user row and return it."""
         ...
 
@@ -173,6 +178,7 @@ class BiometricService:
             await self._user_repo.create(
                 email=f"user-{user_id}@local",
                 password_hash="",
+                user_id=user_id,
             )
 
     async def enroll(self, user_id: uuid.UUID, image: bytes) -> EnrollResult:

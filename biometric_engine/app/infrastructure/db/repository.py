@@ -38,9 +38,23 @@ class UserRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(self, email: str, password_hash: str) -> User:
-        """Insert a user; raise DuplicateEmailError on email conflict."""
-        user = User(email=email, password_hash=password_hash)
+    async def create(
+        self,
+        email: str,
+        password_hash: str,
+        user_id: uuid.UUID | None = None,
+    ) -> User:
+        """Insert a user; raise DuplicateEmailError on email conflict.
+
+        ``user_id`` pins the row id (used by auto-provisioning so later
+        embedding rows satisfy the users FK); when None the DB default
+        (random uuid4) applies as before.
+        """
+        user = User(
+            id=user_id if user_id is not None else uuid.uuid4(),
+            email=email,
+            password_hash=password_hash,
+        )
         self._session.add(user)
         try:
             await self._session.flush()

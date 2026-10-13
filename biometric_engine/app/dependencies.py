@@ -34,9 +34,31 @@ def get_liveness_detector() -> MediaPipeLivenessDetector:
 
 
 async def get_db_session() -> AsyncSession:
-    """Yield a request-scoped async DB session."""
+    """Yield a request-scoped async DB session.
+
+    Unit of work: commit when the request succeeds, roll back when it
+    raises — with one exception. Controlled business outcomes surface as
+    ``HTTPException`` (endpoints translate domain rejections into 4xx),
+    and the service writes its failure audit BEFORE raising, so those
+    rows must survive: commit, not rollback. Unexpected (non-HTTP)
+    errors still roll back. Without any commit here, flush-only
+    repository writes would stay invisible to later requests and vanish
+    on session close.
+    """
     async for session in get_async_session():
-        yield session
+        try:
+            yield session
+        except HTTPException:
+            try:
+                await session.commit()
+            except Exception:  # noqa: BLE001 - commit fallback must roll back on any failure
+                await session.rollback()
+            raise
+        except Exception:
+            await session.rollback()
+            raise
+        else:
+            await session.commit()
 
 
 async def get_redis() -> object:

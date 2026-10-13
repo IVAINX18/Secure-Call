@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.router import router as v1_router
@@ -20,6 +21,7 @@ from app.core.logging import (
     unbind_request_id,
 )
 from app.core.metrics import REQUEST_DURATION_SECONDS, REQUESTS_TOTAL
+from app.core.rate_limit import limiter
 from app.infrastructure.cache.client import close_redis_client, create_redis_client
 from app.infrastructure.db.session import dispose_engine, get_engine
 
@@ -99,8 +101,15 @@ def create_app() -> FastAPI:
         logger.exception("unhandled_exception", path=request.url.path)
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+    async def _rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.info("rate_limit_exceeded", path=request.url.path)
+        detail = getattr(exc, "detail", "Rate limit exceeded")
+        return JSONResponse(status_code=429, content={"detail": str(detail)})
+
     app.include_router(v1_router)
     app.mount("/metrics", make_asgi_app())
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
     return app
 
 

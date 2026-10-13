@@ -116,9 +116,16 @@ class FakeUserRepo:
         self._ids: set[uuid.UUID] = set(existing_ids or set())
         self.created: list[tuple[str, str]] = []
 
-    async def create(self, email: str, password_hash: str) -> SimpleNamespace:
+    async def create(
+        self,
+        email: str,
+        password_hash: str,
+        user_id: uuid.UUID | None = None,
+    ) -> SimpleNamespace:
         """Record the creation and pretend the user now exists."""
         self.created.append((email, password_hash))
+        if user_id is not None:
+            self._ids.add(user_id)
         return SimpleNamespace(email=email)
 
     async def find_by_email(self, email: str) -> SimpleNamespace | None:

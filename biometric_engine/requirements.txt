@@ -167,6 +167,10 @@ protobuf==7.36.2
     # via
     #   onnx
     #   onnxruntime
+psycopg==3.3.6
+    # via biometric-engine
+psycopg-binary==3.3.6 ; implementation_name != 'pypy'
+    # via psycopg
 pyasn1==0.6.4
     # via
     #   python-jose
@@ -241,6 +245,7 @@ typing-extensions==4.16.0
     #   limits
     #   onnx
     #   opentelemetry-api
+    #   psycopg
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
@@ -251,6 +256,8 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
     #   pydantic-settings
+tzdata==2026.5 ; sys_platform == 'win32'
+    # via psycopg
 urllib3==2.8.0
     # via requests
 uvicorn==0.54.0

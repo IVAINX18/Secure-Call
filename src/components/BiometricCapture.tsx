@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, CameraOff, Upload, RefreshCw } from 'lucide-react';
 import { fileToBase64, snapshotVideoFrame } from '../lib/biometricApi';
+import { Button } from './ui';
 
 interface BiometricCaptureProps {
   onCapture: (imageBase64: string) => void;
@@ -89,75 +90,95 @@ const BiometricCapture: React.FC<BiometricCaptureProps> = ({ onCapture, onClear,
 
   return (
     <div className="space-y-4">
-      <div className="bg-gray-900 rounded-md overflow-hidden">
+      <div className="overflow-hidden rounded-card border border-faded bg-mist">
         {preview && !streaming ? (
-          <img src={preview} alt="Captured face preview" className="w-full max-h-64 object-contain" />
+          <img src={preview} alt="Captured face preview" className="min-h-[240px] w-full bg-mist object-contain" />
         ) : (
-          <video ref={videoRef} muted playsInline className="w-full max-h-64 object-contain bg-gray-900" />
-        )}
-        {!streaming && !preview && (
-          <p className="text-center text-sm text-gray-400 py-10">Camera preview appears here</p>
+          <>
+            <video ref={videoRef} muted playsInline aria-label="Camera preview" className={`w-full object-cover ${streaming ? 'min-h-[240px]' : 'hidden'}`} />
+            {!streaming && (
+              <div className="flex min-h-[240px] w-full flex-col items-center justify-center gap-2 px-4 py-6">
+                <Camera className="h-8 w-8 text-ink" aria-hidden="true" />
+                <p className="text-sm font-medium text-ink">Camera preview appears here</p>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {cameraError && (
-        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2" role="alert">
+        <p className="rounded-card border border-faded bg-mist px-3 py-2 text-sm font-normal text-ink" role="alert">
           {cameraError}
         </p>
       )}
 
       <div className="flex flex-wrap gap-2">
         {!streaming ? (
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={startCamera}
             disabled={disabled}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            aria-label="Start camera"
+            className="min-h-[44px]"
           >
-            <Camera className="h-4 w-4 mr-2" />
+            <Camera className="h-4 w-4" aria-hidden="true" />
             Start camera
-          </button>
+          </Button>
         ) : (
           <>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={takeSnapshot}
               disabled={disabled}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+              aria-label="Capture photo"
+              className="min-h-[44px]"
             >
-              <Camera className="h-4 w-4 mr-2" />
+              <Camera className="h-4 w-4" aria-hidden="true" />
               Capture photo
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={stopCamera}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+              aria-label="Stop camera"
+              className="min-h-[44px]"
             >
-              <CameraOff className="h-4 w-4 mr-2" />
+              <CameraOff className="h-4 w-4" aria-hidden="true" />
               Stop camera
-            </button>
+            </Button>
           </>
         )}
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={() => fileRef.current?.click()}
           disabled={disabled}
-          className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+          aria-label="Upload an image instead"
+          className="min-h-[44px]"
         >
-          <Upload className="h-4 w-4 mr-2" />
+          <Upload className="h-4 w-4" aria-hidden="true" />
           Or upload an image
-        </button>
+        </Button>
         {preview && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={clear}
-            className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+            aria-label="Clear captured image"
+            className="min-h-[44px]"
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Clear
-          </button>
+          </Button>
         )}
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} aria-label="Choose an image file" />
       </div>
     </div>
   );

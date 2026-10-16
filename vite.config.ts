@@ -13,7 +13,7 @@ export default defineConfig({
     headers: {
       'Permissions-Policy': 'camera=*, microphone=*, display-capture=*',
       'Feature-Policy': 'camera *; microphone *; display-capture *',
-      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: wss: https:; media-src 'self' blob: data: https: mediastream:; connect-src 'self' wss: https: ws: http://localhost:8800; frame-src 'self' https:; worker-src 'self' blob:;",
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: wss: https:; media-src 'self' blob: data: https: mediastream:; connect-src 'self' wss: https: ws: http://localhost:3000 http://127.0.0.1:3000 http://localhost:8800; frame-src 'self' https:; worker-src 'self' blob:;",
     }
   },
   preview: {
@@ -21,7 +21,7 @@ export default defineConfig({
     headers: {
       'Permissions-Policy': 'camera=*, microphone=*, display-capture=*',
       'Feature-Policy': 'camera *; microphone *; display-capture *',
-      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: wss: https:; media-src 'self' blob: data: https: mediastream:; connect-src 'self' wss: https: ws: http://localhost:8800; frame-src 'self' https:; worker-src 'self' blob:;",
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: wss: https:; media-src 'self' blob: data: https: mediastream:; connect-src 'self' wss: https: ws: http://localhost:3000 http://127.0.0.1:3000 http://localhost:8800; frame-src 'self' https:; worker-src 'self' blob:;",
     }
   },
   build: {

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ScanFace, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import BiometricTokenField from '../components/BiometricTokenField';
 import BiometricCapture from '../components/BiometricCapture';
+import { Button, Card, Tag, Spinner } from '../components/ui';
 import {
   BiometricApiError,
   enrollFace,
@@ -45,84 +46,104 @@ const BiometricEnroll: React.FC = () => {
     }
   };
 
+  const ready = token.trim().length > 0 && image !== null;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-paper">
+      <div className="mx-auto w-full max-w-page px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <Link to="/settings" className="inline-flex items-center text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="h-5 w-5 mr-2" />
+          <Link
+            to="/settings"
+            className="inline-flex min-h-[44px] items-center font-medium text-ink hover:text-iris focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30"
+          >
+            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
             Back to Settings
           </Link>
         </div>
 
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center">
-              <ScanFace className="h-6 w-6 text-gray-600 mr-2" />
-              <h2 className="text-xl font-semibold text-gray-900">Biometric enrollment</h2>
-            </div>
-            <p className="mt-1 text-sm text-gray-600">
-              Capture your face and enroll it in the biometric engine.
-            </p>
-          </div>
+        <h1 className="font-display text-[40px] font-normal leading-[1.15] text-ink sm:text-[48px]">
+          Biometric enrollment
+        </h1>
+        <p className="mt-2 max-w-[65ch] text-base font-normal leading-[1.5] text-ink/60">
+          Capture your face and enroll it in the biometric engine.
+        </p>
 
-          <div className="p-6 space-y-6">
-            <BiometricTokenField token={token} onChange={handleTokenChange} />
+        <div className="mt-8 grid grid-cols-1 gap-6">
+          <Card variant="paper" padding="lg" elevated>
+            <div className="space-y-6">
+              <BiometricTokenField token={token} onChange={handleTokenChange} />
 
-            <BiometricCapture
-              onCapture={(raw) => {
-                setImage(raw);
-                setResult(null);
-                setError('');
-              }}
-              onClear={() => {
-                setImage(null);
-                setResult(null);
-                setError('');
-              }}
-              disabled={sending}
-            />
+              <BiometricCapture
+                onCapture={(raw) => {
+                  setImage(raw);
+                  setResult(null);
+                  setError('');
+                }}
+                onClear={() => {
+                  setImage(null);
+                  setResult(null);
+                  setError('');
+                }}
+                disabled={sending}
+              />
 
-            <div>
-              <button
-                type="button"
-                onClick={handleEnroll}
-                disabled={sending || !image}
-                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                  sending || !image ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
-                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-              >
-                {sending ? 'Enrolling...' : 'Enroll this face'}
-              </button>
-            </div>
-
-            {error && (
-              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" role="alert">
-                <div className="flex items-start">
-                  <XCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-                  <span className="block sm:inline">{error}</span>
-                </div>
+              <div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={handleEnroll}
+                  disabled={sending || !ready}
+                  loading={sending}
+                  aria-label="Enroll this face"
+                  className="min-h-[44px] w-full"
+                >
+                  {sending ? 'Enrolling...' : 'Enroll this face'}
+                </Button>
+                {!ready && !sending && (
+                  <p className="mt-2 text-sm font-normal text-ink/60">
+                    Paste your engine token and capture a photo to enable enrollment.
+                  </p>
+                )}
               </div>
-            )}
 
-            {result && (
-              <div className="bg-green-50 border border-green-200 rounded px-4 py-3" role="status">
-                <div className="flex items-start">
-                  <CheckCircle2 className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0 text-green-600" />
-                  <div className="text-sm">
-                    <p className="font-medium text-green-800">Face enrolled</p>
-                    <p className="mt-1 text-green-700">
-                      Quality score: <span className="font-semibold">{result.quality_score.toFixed(4)}</span>
-                      {' '}(gate: 0.7 — below it the engine rejects with a 400)
-                    </p>
-                    <p className="mt-1 text-green-700 break-all">
-                      Embedding id: <span className="font-mono text-xs">{result.embedding_id}</span>
-                    </p>
+              {sending && (
+                <div className="flex items-center gap-3 rounded-card border border-faded bg-mist px-4 py-3" role="status" aria-live="polite">
+                  <Spinner size="md" />
+                  <span className="text-sm font-medium text-ink">Sending to the engine...</span>
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-card border border-faded bg-mist px-4 py-3" role="alert">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-ink" aria-hidden="true" />
+                    <span className="block text-sm font-normal text-ink sm:inline">{error}</span>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+
+              {result && (
+                <div className="rounded-card border border-faded bg-paper px-4 py-3" role="status">
+                  <div className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ink" aria-hidden="true" />
+                    <div className="text-sm">
+                      <p className="font-medium text-ink">Face enrolled</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Tag>quality_score {result.quality_score.toFixed(4)}</Tag>
+                        <Tag>
+                          <span className="break-all">embedding_id {result.embedding_id}</span>
+                        </Tag>
+                      </div>
+                      <p className="mt-2 font-normal text-ink/60">
+                        Gate: 0.7, below it the engine rejects with a 400.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
         </div>
       </div>
     </div>

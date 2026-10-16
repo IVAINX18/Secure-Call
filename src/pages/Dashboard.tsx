@@ -1,17 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Video, UserPlus, Copy, Check, LogOut } from 'lucide-react';
+import { Video, UserPlus, Copy, Check } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import Logo from '../components/Logo';
+import { Button, Card, Input, Tag } from '../components/ui';
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
   const [roomId, setRoomId] = useState('');
   const [showInvite, setShowInvite] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
   const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
-  
+
   const generateRoomId = () => {
     return uuidv4().substring(0, 8);
   };
@@ -27,149 +26,132 @@ const Dashboard: React.FC = () => {
     navigate(`/video-call/${roomId}`);
   };
 
+  const toggleInvite = () => {
+    if (!showInvite && !inviteCode) {
+      setInviteCode(generateRoomId());
+    }
+    setShowInvite(!showInvite);
+  };
+
   const copyRoomCode = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <Logo />
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">Welcome, {user?.username}</span>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-              >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </button>
-            </div>
-          </div>
+    <div className="min-h-screen bg-paper font-sans text-ink">
+      {/* Hero band */}
+      <section className="bg-blush">
+        <div className="mx-auto max-w-page px-4 py-12 sm:px-6 md:py-16 lg:px-8">
+          <Tag className="border-iris/30 text-ink">Secure Video Calls</Tag>
+          <h1 className="mt-4 max-w-[20ch] font-display text-[40px] font-normal leading-[1.15] text-ink md:text-5xl">
+            Video Calls
+          </h1>
+          <p className="mt-4 max-w-[65ch] text-base font-normal leading-relaxed text-ink/80">
+            Start a new video call or join an existing one using a room code.
+          </p>
+          <Button onClick={createNewCall} className="mt-6 min-h-[44px]">
+            <Video className="h-5 w-5" aria-hidden="true" />
+            Start a Call
+          </Button>
         </div>
-      </header>
+      </section>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white shadow sm:rounded-lg">
-          <div className="px-4 py-5 sm:p-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Video Calls</h3>
-            <div className="mt-5">
-              <div className="rounded-md bg-blue-50 p-4 mb-6">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <Video className="h-5 w-5 text-blue-400" />
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-blue-800">Secure Video Calls</h3>
-                    <div className="mt-2 text-sm text-blue-700">
-                      <p>Start a new video call or join an existing one using a room code.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+      <section className="bg-mist">
+        <div className="mx-auto max-w-page px-4 py-12 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Start card */}
+            <Card variant="paper" padding="lg">
+              <h2 className="font-serif text-[28px] font-normal leading-[1.25] text-ink">
+                Start a New Video Call
+              </h2>
+              <p className="mt-2 text-base font-normal leading-relaxed text-ink/80">
+                Start a new video call or join an existing one using a room code.
+              </p>
+              <Button onClick={createNewCall} className="mt-6 min-h-[44px] w-full">
+                <Video className="h-5 w-5" aria-hidden="true" />
+                Start a New Video Call
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={toggleInvite}
+                aria-expanded={showInvite}
+                className="mt-4 min-h-[44px] w-full"
+              >
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Generate Room Code
+              </Button>
 
-              <div className="space-y-6">
-                <div>
-                  <button
-                    onClick={createNewCall}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <Video className="h-5 w-5 mr-2" />
-                    Start a New Video Call
-                  </button>
-                </div>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                    <div className="w-full border-t border-gray-300"></div>
-                  </div>
-                  <div className="relative flex justify-center">
-                    <span className="px-2 bg-white text-sm text-gray-500">or join existing call</span>
-                  </div>
-                </div>
-
-                <form onSubmit={joinCall}>
-                  <label htmlFor="room-code" className="block text-sm font-medium text-gray-700 mb-2">
-                    Enter Room Code
-                  </label>
-                  <div className="flex rounded-md shadow-sm">
-                    <input
-                      type="text"
-                      id="room-code"
-                      value={roomId}
-                      onChange={(e) => setRoomId(e.target.value)}
-                      placeholder="Enter room code"
-                      className="flex-1 min-w-0 block w-full px-3 py-2 rounded-l-md border border-gray-300 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    />
+              {showInvite && (
+                <div className="mt-4 bg-mist p-4 rounded-card">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-ink">Share Room Code</h3>
                     <button
-                      type="submit"
-                      disabled={!roomId.trim()}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white ${
-                        roomId.trim() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'
-                      } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                      type="button"
+                      onClick={() => setShowInvite(false)}
+                      aria-label="Close share panel"
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-pill text-ink/60 transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30"
                     >
-                      Join Call
+                      <span className="sr-only">Close</span>
+                      <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M6.293 6.293a1 1 0 011.414 0L10 8.586l2.293-2.293a1 1 0 111.414 1.414L11.414 10l2.293 2.293a1 1 0 01-1.414 1.414L10 11.414l-2.293 2.293a1 1 0 01-1.414-1.414L8.586 10 6.293 7.707a1 1 0 010-1.414z" />
+                      </svg>
                     </button>
                   </div>
-                </form>
-
-                {showInvite && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <div className="flex justify-between items-center mb-2">
-                      <h4 className="text-sm font-medium text-gray-900">Share Room Code</h4>
-                      <button
-                        onClick={() => setShowInvite(false)}
-                        className="text-gray-400 hover:text-gray-500"
-                      >
-                        <span className="sr-only">Close</span>
-                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M6.293 6.293a1 1 0 011.414 0L10 8.586l2.293-2.293a1 1 0 111.414 1.414L11.414 10l2.293 2.293a1 1 0 01-1.414 1.414L10 11.414l-2.293 2.293a1 1 0 01-1.414-1.414L8.586 10 6.293 7.707a1 1 0 010-1.414z" />
-                        </svg>
-                      </button>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={generateRoomId()}
-                        className="flex-1 block w-full px-3 py-2 sm:text-sm border border-gray-300 rounded-md bg-gray-100"
-                      />
-                      <button
-                        onClick={() => copyRoomCode(generateRoomId())}
-                        className="inline-flex items-center p-2 border border-transparent rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={inviteCode}
+                      aria-label="Generated room code"
+                      className="min-h-[44px] w-full min-w-0 flex-1 rounded-small border border-faded bg-paper px-3 py-2 text-base text-ink focus:border-iris focus:outline-none focus:ring-2 focus:ring-iris/30"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copyRoomCode(inviteCode)}
+                      aria-label="Copy room code"
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-pill bg-iris px-4 text-paper transition-colors hover:bg-indigo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 focus-visible:ring-offset-2"
+                    >
+                      {copied ? <Check className="h-5 w-5" aria-hidden="true" /> : <Copy className="h-5 w-5" aria-hidden="true" />}
+                    </button>
                   </div>
-                )}
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowInvite(!showInvite)}
-                    className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  >
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Generate Room Code
-                  </button>
+                  {copied && (
+                    <Tag className="mt-2" aria-live="polite">
+                      Copied
+                    </Tag>
+                  )}
                 </div>
-              </div>
-            </div>
+              )}
+            </Card>
+
+            {/* Join card */}
+            <Card variant="paper" padding="lg">
+              <h2 className="font-serif text-[28px] font-normal leading-[1.25] text-ink">
+                Join a Call
+              </h2>
+              <p className="mt-2 text-base font-normal leading-relaxed text-ink/80">
+                or join existing call
+              </p>
+              <form onSubmit={joinCall} className="mt-6">
+                <Input
+                  label="Enter Room Code"
+                  type="text"
+                  id="room-code"
+                  value={roomId}
+                  onChange={(e) => setRoomId(e.target.value)}
+                  placeholder="Enter room code"
+                />
+                <Button type="submit" disabled={!roomId.trim()} className="mt-4 min-h-[44px] w-full">
+                  Join Call
+                </Button>
+              </form>
+            </Card>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

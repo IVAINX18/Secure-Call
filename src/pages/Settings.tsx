@@ -2,51 +2,67 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import LogoUploader from '../components/LogoUploader';
 import Logo from '../components/Logo';
-import { ArrowLeft, Settings as SettingsIcon, ScanFace } from 'lucide-react';
+import { Card } from '../components/ui';
+import { ArrowLeft, ScanFace } from 'lucide-react';
 
+// Settings: paper canvas, mist section cards. Branding (Logo + uploader)
+// and a biometrics link card to /settings/biometric-enroll.
 const Settings: React.FC = () => {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-paper">
+      <div className="mx-auto w-full max-w-page px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
           <Link
             to="/dashboard"
-            className="inline-flex items-center text-gray-600 hover:text-gray-900"
+            className="inline-flex min-h-[44px] items-center font-medium text-ink hover:text-iris focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30"
           >
-            <ArrowLeft className="h-5 w-5 mr-2" />
+            <ArrowLeft className="mr-2 h-5 w-5" aria-hidden="true" />
             Back to Dashboard
           </Link>
         </div>
 
-        <div className="bg-white shadow rounded-lg">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <div className="flex items-center">
-              <SettingsIcon className="h-6 w-6 text-gray-600 mr-2" />
-              <h2 className="text-xl font-semibold text-gray-900">Platform Settings</h2>
-            </div>
-          </div>
+        <h1 className="font-display text-[40px] font-normal leading-[1.15] text-ink">
+          Platform Settings
+        </h1>
+        <p className="mt-2 max-w-[65ch] text-base font-normal leading-[1.5] text-ink/60">
+          Brand the workspace and manage face enrollment for the biometric engine.
+        </p>
 
-          <div className="p-6">
-            <div className="mb-8">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Company Branding</h3>
-              <div className="mb-6">
-                <p className="text-sm text-gray-600 mb-4">Current Logo:</p>
-                <Logo className="mb-4" />
+        <div className="mt-8 grid grid-cols-1 gap-6">
+          <Card variant="mist" padding="lg">
+            <h2 className="font-serif text-[28px] font-normal leading-[1.25] text-ink">
+              Company Branding
+            </h2>
+            <div className="mt-6">
+              <p className="text-sm font-medium text-ink">Current Logo:</p>
+              <div className="mt-4 rounded-card border border-faded bg-paper p-6">
+                <Logo className="mb-0" />
               </div>
+            </div>
+            <div className="mt-6">
               <LogoUploader />
             </div>
+          </Card>
 
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Biometrics</h3>
+          <Card variant="mist" padding="lg">
+            <h2 className="font-serif text-[28px] font-normal leading-[1.25] text-ink">
+              Biometrics
+            </h2>
+            <p className="mt-2 max-w-[65ch] text-base font-normal leading-[1.5] text-ink/60">
+              Enroll a face in the engine, then verify it at sign-in. The engine
+              enforces a 0.7 quality gate and a per-user rate limit.
+            </p>
+            <div className="mt-6">
               <Link
                 to="/settings/biometric-enroll"
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                aria-label="Enroll your face"
+                className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-pill border border-iris bg-transparent px-6 py-3.5 text-base font-medium text-iris transition-colors hover:bg-iris/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 focus-visible:ring-offset-2"
               >
-                <ScanFace className="h-4 w-4 mr-2" />
+                <ScanFace className="h-4 w-4" aria-hidden="true" />
                 Enroll your face
               </Link>
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

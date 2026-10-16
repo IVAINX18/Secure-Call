@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRole } from '../contexts/RoleContext';
+import { Copy, Check } from 'lucide-react';
 import RoleSelector from '../components/RoleSelector';
 import EnhancedWebRTCRoom from '../components/EnhancedWebRTCRoom';
-import Logo from '../components/Logo';
+import { Button, Card, Tag } from '../components/ui';
 
 const VideoCall: React.FC = () => {
   const navigate = useNavigate();
@@ -37,43 +38,52 @@ const VideoCall: React.FC = () => {
 
   if (!roomId) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">Invalid Room</h2>
-          <p className="mb-4">No room ID provided</p>
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
-          >
+      <div className="flex min-h-screen items-center justify-center bg-blush p-4 font-sans">
+        <Card variant="paper" padding="lg" elevated className="w-full max-w-page text-center sm:max-w-md">
+          <Tag>Secure Video Calls</Tag>
+          <h2 className="mt-4 font-display text-[40px] font-normal leading-[1.15] text-ink">
+            Invalid Room
+          </h2>
+          <p className="mt-2 text-base font-normal leading-relaxed text-ink/80">
+            No room ID provided
+          </p>
+          <Button onClick={() => navigate('/dashboard')} className="mt-6 min-h-[44px]">
             Return to Dashboard
-          </button>
-        </div>
+          </Button>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="h-screen bg-gray-900 overflow-hidden relative">
-      <EnhancedWebRTCRoom 
-        userName={user?.username || 'Anonymous'} 
+    <div className="relative h-screen overflow-hidden bg-paper font-sans">
+      <EnhancedWebRTCRoom
+        userName={user?.username || 'Anonymous'}
         roomId={roomId}
+        isHost={role === 'host'}
         onEndCall={handleEndCall}
       />
 
       {/* Room Info Overlay */}
       {role === 'host' && (
-        <div className="absolute bottom-20 left-4 bg-gray-800 bg-opacity-90 p-4 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <span className="text-white text-sm">Room: {roomId}</span>
+        <Card variant="mist" padding="sm" className="absolute bottom-20 left-4">
+          <div className="flex min-h-[44px] items-center gap-2">
+            <span className="text-sm font-medium text-ink">Room: {roomId}</span>
             <button
+              type="button"
               onClick={copyRoomCode}
-              className="p-1 rounded bg-blue-600 hover:bg-blue-700 transition-colors"
-              title="Copy room code"
+              aria-label="Copy room code"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-pill bg-iris px-3 text-paper transition-colors hover:bg-indigo focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 focus-visible:ring-offset-2"
             >
-              <Logo className="h-4 w-4 text-white" />
+              {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
             </button>
+            {copied && (
+              <Tag aria-live="polite">
+                Copied
+              </Tag>
+            )}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

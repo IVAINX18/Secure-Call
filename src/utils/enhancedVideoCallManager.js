@@ -79,6 +79,10 @@ class EnhancedVideoCallManager {
         this.participants = [];
         this.isConnecting = false;
         this.mediaReady = false;
+
+        // 🧊 ICE candidate queue: candidates arriving before the remote
+        // description is set are buffered here and flushed afterwards
+        this.pendingCandidates = [];
         
         // 🔧 ADDED: Diagnóstico de conectividad
         this.diagnostics = {
@@ -93,6 +97,12 @@ class EnhancedVideoCallManager {
         this.debugMode = true;
         this.heartbeatInterval = null;
         this.connectionMonitor = null;
+
+        // Media-ready handshake: debounce + exactly-once PC setup for late join.
+        // Host waits for the peer's media before creating the offer, so a late
+        // joiner always triggers PC setup exactly once instead of racing offers.
+        this._pcSetupInProgress = false;
+        this._peerMediaReadyTimer = null;
     }
 
     _log(message, level = 'info') {
@@ -151,8 +161,35 @@ class EnhancedVideoCallManager {
         return suggestions;
     }
 
-    // 🔧 FIXED: Diagnóstico completo de conectividad
-    async runConnectivityDiagnostic() {
+    // Single /health probe with a 10s abort timeout per attempt.
+    async _fetchServerHealthOnce(serverUrl) {
+        const startTime = Date.now();
+        const response = await fetch(`${serverUrl}/health`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(10000)
+        });
+        const responseTime = Date.now() - startTime;
+        let data = null;
+        if (response.ok) {
+            try {
+                data = await response.json();
+            } catch (_parseError) {
+                data = null;
+            }
+        }
+        return { response, responseTime, data };
+    }
+
+    _sleep(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    // 🔧 FIXED: Diagnóstico completo de conectividad con reintentos (Render cold-start)
+    // Reintenta fetch(serverUrl/health) hasta 3 veces con backoff para que el
+    // indicador "Server" se recupere cuando el backend despierta tarde. Cada
+    // intento conserva su propio timeout de abort de 10s.
+    async runConnectivityDiagnostic(maxAttempts = 3, baseDelayMs = 1500) {
         this._log('🔍 Running comprehensive connectivity diagnostic...');
         
         const results = {
@@ -180,27 +217,40 @@ class EnhancedVideoCallManager {
             }
         };
 
-        // Test server connectivity
-        try {
-            const serverUrl = this._getServerUrl();
-            const startTime = Date.now();
-            
-            const response = await fetch(`${serverUrl}/health`, {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                signal: AbortSignal.timeout(10000)
-            });
-            
-            results.server.responseTime = Date.now() - startTime;
-            results.server.reachable = response.ok;
-            
-            if (response.ok) {
-                const data = await response.json();
-                results.server.data = data;
-                this.diagnostics.serverReachable = true;
+        // Test server connectivity with retries (Render cold-start: first
+        // fetch often fails while the service wakes up, then socket.io
+        // retries succeed and must heal this flag too).
+        const serverUrl = this._getServerUrl();
+        const attempts = Math.max(1, maxAttempts || 1);
+        let lastError = null;
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                const { response, responseTime, data } = await this._fetchServerHealthOnce(serverUrl);
+
+                results.server.responseTime = responseTime;
+                results.server.reachable = response.ok;
+                results.server.attempts = attempt;
+
+                if (response.ok) {
+                    if (data !== null) {
+                        results.server.data = data;
+                    }
+                    this.diagnostics.serverReachable = true;
+                    lastError = null;
+                    break;
+                }
+                lastError = new Error(`Health check returned ${response.status} (attempt ${attempt}/${attempts})`);
+            } catch (error) {
+                lastError = error;
             }
-        } catch (error) {
-            results.server.error = error.message;
+            if (attempt < attempts) {
+                this._log(`⏳ Health check attempt ${attempt}/${attempts} failed, retrying...`);
+                await this._sleep(baseDelayMs * attempt);
+            }
+        }
+        if (lastError) {
+            results.server.error = lastError.message;
+            results.server.attempts = attempts;
             this.diagnostics.serverReachable = false;
         }
 
@@ -246,9 +296,9 @@ class EnhancedVideoCallManager {
             this._setState('connecting_signaling');
             this._log(`🔗 Connecting to signaling server (attempt ${this.connectionAttempts}/${this.config.maxRetries})`);
 
-            // Ejecutar diagnóstico si es el primer intento
+            // Health-check runs in background and never gates socket connect.
             if (this.connectionAttempts === 1) {
-                await this.runConnectivityDiagnostic();
+                this.runConnectivityDiagnostic().catch(() => {});
             }
 
             const serverUrl = this._getServerUrl();
@@ -322,6 +372,9 @@ class EnhancedVideoCallManager {
                 clearTimeout(timeout);
                 this._log(`✅ Socket connected: ${this.socket.id}`);
                 this._setupSocketEvents();
+                // Re-probe /health (with retries) so the Server light heals
+                // after a cold-start where the first probe failed.
+                this.runConnectivityDiagnostic().catch(() => {});
                 resolve();
             });
 
@@ -343,6 +396,7 @@ class EnhancedVideoCallManager {
             this.socket.on('reconnect', (attemptNumber) => {
                 this._log(`🔄 Socket reconnected after ${attemptNumber} attempts`);
                 this.diagnostics.socketConnected = true;
+                this.runConnectivityDiagnostic().catch(() => {});
             });
         });
     }
@@ -377,6 +431,14 @@ class EnhancedVideoCallManager {
             }
             
             this._clearRemoteStream();
+
+            // Peer gone: drop the PC so a later (re)join triggers a fresh
+            // setup through the media-ready handshake instead of reusing a
+            // stale connection blocked by the exactly-once guard.
+            if (this.peerConnection) {
+                try { this.peerConnection.close(); } catch (_) {}
+                this.peerConnection = null;
+            }
         });
 
         // Eventos WebRTC signaling
@@ -426,6 +488,30 @@ class EnhancedVideoCallManager {
         // Heartbeat
         this.socket.on('heartbeat-ack', () => {
             this._log('💓 Heartbeat acknowledged');
+        });
+
+        // Media-ready handshake: when the peer's media is ready, the host
+        // (debounced, 1s) sets up the peer connection exactly once so a late
+        // join always triggers PC setup.
+        this.socket.on('peer-media-ready', (data) => {
+            this._log(`✅ Peer media ready: ${data?.userName || data?.userId || 'unknown'} (${data?.role || 'unknown'})`);
+
+            if (!this.isHost || !this.mediaReady) {
+                return;
+            }
+
+            if (this._peerMediaReadyTimer) {
+                clearTimeout(this._peerMediaReadyTimer);
+            }
+
+            this._peerMediaReadyTimer = setTimeout(() => {
+                this._peerMediaReadyTimer = null;
+                if (this.peerConnection && this.peerConnection.signalingState !== 'closed') {
+                    this._log('⏭️ Peer connection already exists, skipping duplicate setup');
+                    return;
+                }
+                this._initiatePeerConnection();
+            }, 1000);
         });
     }
 
@@ -648,6 +734,22 @@ class EnhancedVideoCallManager {
             this._setState('media_ready');
             this._log('✅ Local media setup completed');
 
+            // Announce local media so the peer (host side) can trigger the
+            // peer connection exactly once. The server relays this as
+            // `peer-media-ready` to the other participants in the room.
+            if (this.socket && this.socket.connected && this.roomId) {
+                const videoTracks = stream.getVideoTracks();
+                const audioTracks = stream.getAudioTracks();
+                this.socket.emit('media-ready', {
+                    roomId: this.roomId,
+                    mediaInfo: {
+                        video: videoTracks.length > 0,
+                        audio: audioTracks.length > 0
+                    },
+                    timestamp: Date.now()
+                });
+            }
+
             return stream;
 
         } catch (error) {
@@ -657,8 +759,20 @@ class EnhancedVideoCallManager {
         }
     }
 
-    // 🔧 FIXED: Configuración de peer connection mejorada
-    async _initiatePeerConnection() {
+    // Configuración de peer connection mejorada. skipOffer es true cuando
+    // esta PC se crea para responder a una offer entrante (evita el loop
+    // offer/offer). El guard _pcSetupInProgress garantiza setup exactamente
+    // una vez ante eventos concurrentes (user-joined + peer-media-ready).
+    async _initiatePeerConnection(skipOffer = false) {
+        if (this._pcSetupInProgress) {
+            this._log('⏭️ Peer connection setup already in progress, skipping');
+            return;
+        }
+        if (this.peerConnection && this.peerConnection.signalingState !== 'closed') {
+            this._log('⏭️ Peer connection already exists, skipping duplicate setup');
+            return;
+        }
+        this._pcSetupInProgress = true;
         try {
             this._setState('creating_peer_connection');
             this._log('🔗 Creating peer connection...');
@@ -668,6 +782,7 @@ class EnhancedVideoCallManager {
                 this.peerConnection.close();
                 this.peerConnection = null;
             }
+            this.pendingCandidates = [];
 
             this.peerConnection = new RTCPeerConnection({
                 iceServers: this.config.iceServers,
@@ -686,8 +801,9 @@ class EnhancedVideoCallManager {
                 });
             }
 
-            // Crear offer si somos host
-            if (this.isHost) {
+            // Crear offer si somos host (salvo que esta PC exista solo para
+            // responder a una offer entrante)
+            if (this.isHost && !skipOffer) {
                 await this._createOffer();
             }
 
@@ -696,6 +812,8 @@ class EnhancedVideoCallManager {
         } catch (error) {
             this._handleError(error, 'peer_connection');
             throw error;
+        } finally {
+            this._pcSetupInProgress = false;
         }
     }
 
@@ -730,6 +848,10 @@ class EnhancedVideoCallManager {
             } else if (state === 'failed') {
                 this.diagnostics.peerConnected = false;
                 this._log('Peer connection failed, attempting restart...', 'warn');
+                // Drop the failed PC so the exactly-once guard in
+                // _initiatePeerConnection lets the retry through.
+                try { this.peerConnection.close(); } catch (_) {}
+                this.peerConnection = null;
                 setTimeout(() => this._initiatePeerConnection(), 2000);
             }
         };
@@ -772,13 +894,27 @@ class EnhancedVideoCallManager {
     async _handleOffer(offer, fromId) {
         try {
             this._log(`📥 Handling offer from ${fromId}`);
-            
+
             if (!this.peerConnection) {
-                await this._initiatePeerConnection();
+                await this._initiatePeerConnection(true);
             }
-            
+
+            // Glare guard: ya tenemos una offer local en vuelo y recibimos
+            // otra offer. El host (impolite) ignora la entrante y conserva la
+            // suya; el guest (polite) hace rollback y procesa la entrante.
+            // Sin esto ambos lados recrean offers en loop.
+            if (this.peerConnection.signalingState !== 'stable') {
+                if (this.isHost && this.peerConnection.localDescription) {
+                    this._log('⚠️ Glare detected: ignoring incoming offer, keeping local offer', 'warn');
+                    return;
+                }
+                this._log('⚠️ Glare detected: rolling back local description', 'warn');
+                await this.peerConnection.setLocalDescription({ type: 'rollback' });
+            }
+
             await this.peerConnection.setRemoteDescription(offer);
-            
+            await this._flushPendingCandidates();
+
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
             
@@ -799,6 +935,7 @@ class EnhancedVideoCallManager {
             
             if (this.peerConnection && this.peerConnection.signalingState !== 'stable') {
                 await this.peerConnection.setRemoteDescription(answer);
+                await this._flushPendingCandidates();
                 this._log('✅ Answer processed');
             }
         } catch (error) {
@@ -808,14 +945,36 @@ class EnhancedVideoCallManager {
 
     async _handleIceCandidate(candidate) {
         try {
+            if (!candidate) {
+                return;
+            }
             if (this.peerConnection && this.peerConnection.remoteDescription) {
                 await this.peerConnection.addIceCandidate(candidate);
                 this._log('✅ ICE candidate added');
             } else {
-                this._log('⚠️ Cannot add ICE candidate - no remote description');
+                this.pendingCandidates.push(candidate);
+                this._log(`⏳ ICE candidate queued (${this.pendingCandidates.length} pending)`);
             }
         } catch (error) {
             this._log(`❌ Error adding ICE candidate: ${error.message}`, 'error');
+        }
+    }
+
+    async _flushPendingCandidates() {
+        if (!this.peerConnection || !this.peerConnection.remoteDescription) {
+            return;
+        }
+        const queued = this.pendingCandidates;
+        this.pendingCandidates = [];
+        for (const candidate of queued) {
+            try {
+                await this.peerConnection.addIceCandidate(candidate);
+            } catch (error) {
+                this._log(`❌ Error adding queued ICE candidate: ${error.message}`, 'error');
+            }
+        }
+        if (queued.length > 0) {
+            this._log(`✅ Flushed ${queued.length} queued ICE candidate(s)`);
         }
     }
 
@@ -934,6 +1093,7 @@ class EnhancedVideoCallManager {
             this.peerConnection.close();
             this.peerConnection = null;
         }
+        this.pendingCandidates = [];
 
         if (this.socket) {
             this.socket.disconnect();

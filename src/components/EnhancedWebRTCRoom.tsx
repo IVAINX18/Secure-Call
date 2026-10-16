@@ -1,18 +1,26 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Video, Mic, MicOff, VideoOff, Phone, Users, AlertCircle, RefreshCw, Settings, Activity, Wifi, Shield, Camera, Fingerprint, Scan, Eye, TestTube, Wrench } from 'lucide-react';
+import { Video, Mic, MicOff, VideoOff, PhoneOff, Users, AlertCircle, RefreshCw, Settings, Activity, Wifi, Shield, Camera, Fingerprint, Scan, Eye, TestTube, Wrench } from 'lucide-react';
 import { initializeEnhancedVideoCall, getEnhancedDebugInfo, toggleEnhancedVideo, toggleEnhancedAudio, cleanupEnhancedVideoCall } from '../utils/enhancedVideoCallManager.js';
+import { Button, Card, Spinner, Tag } from './ui';
+import { useRole } from '../contexts/RoleContext';
 
 interface EnhancedWebRTCRoomProps {
   userName: string;
   roomId: string;
   onEndCall: () => void;
+  isHost?: boolean;
 }
 
-const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomId, onEndCall }) => {
+const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomId, onEndCall, isHost: isHostProp }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const enhancedManagerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Role comes from RoleContext (written by RoleSelector); an explicit
+  // isHost prop from the parent takes precedence when provided.
+  const { role } = useRole();
+  const resolvedIsHost = isHostProp ?? role === 'host';
   
   // Estados principales
   const [connectionState, setConnectionState] = useState<string>('idle');
@@ -60,9 +68,16 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
 
   // 🔧 NUEVO: Hook para detectar cambios de tamaño del contenedor
   useEffect(() => {
+    let rafId = 0;
+    let retries = 0;
     const updateContainerDimensions = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
+        if ((rect.width === 0 || rect.height === 0) && retries < 10) {
+          retries += 1;
+          rafId = requestAnimationFrame(updateContainerDimensions);
+          return;
+        }
         setContainerDimensions({
           width: rect.width,
           height: rect.height
@@ -84,6 +99,7 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
     window.addEventListener('resize', updateContainerDimensions);
 
     return () => {
+      cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       window.removeEventListener('orientationchange', updateContainerDimensions);
       window.removeEventListener('resize', updateContainerDimensions);
@@ -218,18 +234,18 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
     switch (connectionState) {
       case 'peer_connected':
       case 'ready':
-        return 'bg-green-600';
+        return 'bg-iris';
       case 'connecting_signaling':
       case 'joining_room':
       case 'requesting_media':
       case 'creating_peer_connection':
-        return 'bg-yellow-600';
+        return 'bg-indigo';
       case 'error':
-        return 'bg-red-600';
+        return 'bg-ink';
       case 'disconnected':
-        return 'bg-gray-600';
+        return 'bg-ink/60';
       default:
-        return 'bg-blue-600';
+        return 'bg-iris';
     }
   };
 
@@ -386,8 +402,9 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
         setError(null);
 
         console.log('🚀 Initializing Enhanced VideoCallManager...');
-        
-        const isHost = Math.random() > 0.5;
+
+        // Role is determined by RoleContext (host = offerer, guest = answerer).
+        const isHost = resolvedIsHost;
         setIsGuest(!isHost);
         
         console.log(`🎭 Role determined - ${isHost ? 'HOST' : 'GUEST'}`);
@@ -456,7 +473,7 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
         enhancedManagerRef.current = null;
       }
     };
-  }, [roomId, userName, handleLocalStream, handleRemoteStream, handleStateChange, handleParticipantsChange, handleError, handleScanNotification]);
+  }, [roomId, userName, resolvedIsHost, handleLocalStream, handleRemoteStream, handleStateChange, handleParticipantsChange, handleError, handleScanNotification]);
 
   // 🔧 FIXED: Escaneo facial con envío de notificación
   const handleFaceScan = async () => {
@@ -578,25 +595,29 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
   // Pantalla de conexión
   if (['idle', 'connecting_signaling', 'signaling_connected', 'joining_room'].includes(connectionState)) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-900 text-white">
-        <div className="text-center p-8 max-w-md">
-          <div className="relative mb-6">
-            <Wifi className="h-16 w-16 text-blue-500 mx-auto animate-pulse" />
-            <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded-full">
+      <div className="flex items-center justify-center h-full bg-paper text-ink">
+        <Card variant="blush" padding="lg" elevated className="text-center max-w-md w-full mx-4">
+          <div className="relative mb-6 inline-block">
+            <Wifi className="h-16 w-16 text-iris mx-auto animate-pulse" aria-hidden="true" />
+            <Tag className="absolute -bottom-2 -right-2 bg-paper">
               {formatElapsedTime(elapsedTime)}
-            </div>
+            </Tag>
           </div>
-          
-          <h2 className="text-2xl font-bold mb-4">
+
+          <h2 className="font-display text-[40px] leading-[1.15] mb-4">
             {connectionState === 'idle' ? 'Initializing Enhanced WebRTC...' : 'Connecting to Room'}
           </h2>
-          
-          <p className="text-gray-300 mb-6">
+
+          <p className="font-medium text-ink/70 mb-6">
             Setting up secure video call with enhanced connectivity...
-            {isGuest && <span className="block text-yellow-300 mt-2">Joining as Guest</span>}
+            {isGuest && <span className="block text-iris mt-2">Joining as Guest</span>}
           </p>
-          
-          <div className="text-sm text-gray-400 space-y-1">
+
+          <div className="flex justify-center mb-6" role="status" aria-label="Connecting">
+            <Spinner size="lg" />
+          </div>
+
+          <div className="text-sm font-medium text-ink/70 space-y-1">
             <p>Room: {roomId}</p>
             <p>User: {userName}</p>
             <p>Role: {isGuest ? 'Guest' : 'Host'}</p>
@@ -605,14 +626,14 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
           </div>
 
           {diagnostics && (
-            <div className="mt-4 text-xs text-gray-500 space-y-1">
-              <p>🌐 Server: {diagnostics.serverReachable ? '✅' : '❌'}</p>
-              <p>🔌 Socket: {diagnostics.socketConnected ? '✅' : '❌'}</p>
-              <p>🚪 Room: {diagnostics.roomJoined ? '✅' : '❌'}</p>
-              <p>🎥 Media: {diagnostics.mediaGranted ? '✅' : '❌'}</p>
+            <div className="mt-4 text-xs text-ink/60 space-y-1">
+              <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${diagnostics.serverReachable ? 'bg-iris' : 'bg-ink'}`} />Server: {diagnostics.serverReachable ? 'Reachable' : '—'}</p>
+              <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${diagnostics.socketConnected ? 'bg-iris' : 'bg-ink'}`} />Socket: {diagnostics.socketConnected ? 'Connected' : '—'}</p>
+              <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${diagnostics.roomJoined ? 'bg-iris' : 'bg-ink'}`} />Room: {diagnostics.roomJoined ? 'Joined' : '—'}</p>
+              <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${diagnostics.mediaGranted ? 'bg-iris' : 'bg-ink'}`} />Media: {diagnostics.mediaGranted ? 'Granted' : '—'}</p>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     );
   }
@@ -620,37 +641,41 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
   // Pantalla de solicitud de medios
   if (connectionState === 'requesting_media') {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-900 text-white">
-        <div className="text-center p-8 max-w-md">
-          <div className="relative mb-6">
-            <Camera className="h-16 w-16 text-yellow-500 mx-auto animate-pulse" />
-            <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded-full">
+      <div className="flex items-center justify-center h-full bg-paper text-ink">
+        <Card variant="paper" padding="lg" elevated className="text-center max-w-md w-full mx-4">
+          <div className="relative mb-6 inline-block">
+            <Camera className="h-16 w-16 text-iris mx-auto animate-pulse" aria-hidden="true" />
+            <Tag className="absolute -bottom-2 -right-2 bg-paper">
               {formatElapsedTime(elapsedTime)}
-            </div>
+            </Tag>
           </div>
-          
-          <h2 className="text-2xl font-bold mb-4">Camera Permission Required</h2>
-          
-          <p className="text-gray-300 mb-6">
+
+          <h2 className="font-display text-[40px] leading-[1.15] mb-4">Camera Permission Required</h2>
+
+          <p className="font-medium text-ink/70 mb-6">
             Please allow access to your camera and microphone when prompted by your browser.
           </p>
-          
-          <div className="bg-yellow-900 bg-opacity-30 p-4 rounded-lg mb-6">
-            <Shield className="h-6 w-6 text-yellow-400 mx-auto mb-2" />
-            <p className="text-yellow-200 text-sm">
+
+          <div className="bg-blush rounded-card p-4 mb-6">
+            <Shield className="h-6 w-6 text-iris mx-auto mb-2" aria-hidden="true" />
+            <p className="text-ink text-sm font-medium">
               Waiting for permissions... ({formatElapsedTime(elapsedTime)})
             </p>
-            <p className="text-yellow-300 text-xs mt-2">
+            <p className="text-ink/60 text-xs mt-2">
               Look for the permission popup in your browser
             </p>
           </div>
-          
-          <div className="text-sm text-gray-400 space-y-1">
-            <p>🔗 Connection: Active</p>
-            <p>👥 Participants: {participants.length}</p>
-            <p>⏱️ Timeout: 45 seconds</p>
+
+          <div className="flex justify-center mb-6" role="status" aria-label="Waiting for permissions">
+            <Spinner size="lg" />
           </div>
-        </div>
+
+          <div className="text-sm font-medium text-ink/70 space-y-1">
+            <p><span aria-hidden="true" className="inline-block w-2 h-2 rounded-full mr-1 bg-iris" />Connection: Active</p>
+            <p>Participants: {participants.length}</p>
+            <p>Timeout: 45 seconds</p>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -658,83 +683,83 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
   // Pantalla de error mejorada
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full bg-gray-900 text-white">
-        <div className="text-center p-8 max-w-4xl">
-          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold mb-2">Connection Error</h3>
-          <p className="text-gray-300 mb-4">{error.message}</p>
-          
+      <div className="flex items-center justify-center h-full bg-paper text-ink">
+        <Card variant="paper" padding="lg" elevated className="text-center max-w-4xl w-full mx-4">
+          <AlertCircle className="h-16 w-16 text-iris mx-auto mb-4" aria-hidden="true" />
+          <h3 className="font-display text-[40px] leading-[1.15] mb-2">Connection Error</h3>
+          <p className="font-medium text-ink/70 mb-4">{error.message}</p>
+
           {error.suggestions && error.suggestions.length > 0 && (
-            <div className="bg-blue-900 bg-opacity-30 p-4 rounded-lg mb-6 text-left">
-              <h4 className="text-blue-200 font-semibold mb-2">Suggestions:</h4>
-              <ul className="text-blue-200 text-sm space-y-1">
+            <div className="bg-mist rounded-card p-4 mb-6 text-left border border-faded">
+              <h4 className="text-ink font-semibold mb-2">Suggestions:</h4>
+              <ul className="text-ink/70 text-sm space-y-1">
                 {error.suggestions.map((suggestion: string, index: number) => (
-                  <li key={index}>• {suggestion}</li>
+                  <li key={index}><span aria-hidden="true" className="text-iris font-semibold">+ </span>{suggestion}</li>
                 ))}
               </ul>
             </div>
           )}
-          
-          <div className="space-x-4 mb-6">
-            <button
+
+          <div className="flex flex-wrap justify-center gap-4 mb-6">
+            <Button
+              variant="primary"
               onClick={handleRetry}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg inline-flex items-center"
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
+              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
               Try Again
-            </button>
-            
-            <button
+            </Button>
+
+            <Button
+              variant="outline"
               onClick={handleEndCall}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg"
             >
               Return to Dashboard
-            </button>
-            
-            <button
+            </Button>
+
+            <Button
+              variant="outline"
               onClick={() => setShowDebug(!showDebug)}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg inline-flex items-center"
             >
-              <Settings className="h-4 w-4 mr-2" />
+              <Settings className="h-4 w-4 mr-2" aria-hidden="true" />
               {showDebug ? 'Hide' : 'Show'} Debug
-            </button>
+            </Button>
           </div>
-          
+
           {showDebug && debugInfo && (
-            <div className="bg-gray-800 p-4 rounded-lg text-left text-xs max-h-64 overflow-y-auto mb-4">
-              <h4 className="text-white font-semibold mb-2">Enhanced Debug Information:</h4>
-              <pre className="text-gray-300 whitespace-pre-wrap">
+            <div className="bg-mist border border-faded rounded-card p-4 text-left text-xs max-h-64 overflow-y-auto mb-4">
+              <h4 className="text-ink font-semibold mb-2">Enhanced Debug Information:</h4>
+              <pre className="text-ink/70 whitespace-pre-wrap">
                 {JSON.stringify(debugInfo, null, 2)}
               </pre>
             </div>
           )}
 
           {error.diagnostics && (
-            <div className="mt-4 text-sm text-gray-400">
-              <p className="font-semibold mb-2">Connection Diagnostics:</p>
+            <div className="mt-4 text-sm text-ink/70">
+              <p className="font-semibold mb-2 text-ink">Connection Diagnostics:</p>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>Server: {error.diagnostics.serverReachable ? '✅ Reachable' : '❌ Unreachable'}</div>
-                <div>Socket: {error.diagnostics.socketConnected ? '✅ Connected' : '❌ Disconnected'}</div>
-                <div>Room: {error.diagnostics.roomJoined ? '✅ Joined' : '❌ Not Joined'}</div>
-                <div>Media: {error.diagnostics.mediaGranted ? '✅ Granted' : '❌ Denied'}</div>
-                <div>Peer: {error.diagnostics.peerConnected ? '✅ Connected' : '❌ Failed'}</div>
-                <div>ICE: {error.diagnostics.iceConnected ? '✅ Connected' : '❌ Failed'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.serverReachable ? 'bg-iris' : 'bg-ink'}`} />Server: {error.diagnostics.serverReachable ? 'Reachable' : '—'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.socketConnected ? 'bg-iris' : 'bg-ink'}`} />Socket: {error.diagnostics.socketConnected ? 'Connected' : '—'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.roomJoined ? 'bg-iris' : 'bg-ink'}`} />Room: {error.diagnostics.roomJoined ? 'Joined' : '—'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.mediaGranted ? 'bg-iris' : 'bg-ink'}`} />Media: {error.diagnostics.mediaGranted ? 'Granted' : '—'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.peerConnected ? 'bg-iris' : 'bg-ink'}`} />Peer: {error.diagnostics.peerConnected ? 'Connected' : '—'}</div>
+                <div><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${error.diagnostics.iceConnected ? 'bg-iris' : 'bg-ink'}`} />ICE: {error.diagnostics.iceConnected ? 'Connected' : '—'}</div>
               </div>
             </div>
           )}
-        </div>
+        </Card>
       </div>
     );
   }
 
   // Interfaz principal - Video remoto + video local en picture-in-picture
   return (
-    <div ref={containerRef} className="flex flex-col h-full bg-gray-900 relative overflow-hidden">
+    <div ref={containerRef} className="flex flex-col h-full min-h-[480px] w-full bg-paper text-ink relative overflow-hidden">
       {/* 🔧 NUEVO: Contenedor de video responsivo */}
       <div className="flex-1 relative flex items-center justify-center" style={{ minHeight: 0 }}>
         {/* 🔧 NUEVO: Video remoto con dimensiones calculadas */}
-        <div 
-          className="relative bg-gray-800 rounded-lg overflow-hidden"
+        <div
+          className="relative bg-mist rounded-card overflow-hidden border border-mist shadow-photo"
           style={{
             width: videoDimensions.width,
             height: videoDimensions.height,
@@ -754,7 +779,7 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
           />
 
           {/* 🔧 NUEVO: Indicador de resolución */}
-          <div className="absolute top-2 left-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
+          <div className="absolute top-2 left-2 bg-paper/90 text-ink text-xs font-medium px-2 py-1 rounded-small border border-faded">
             {containerDimensions.width}x{containerDimensions.height}
             {remoteVideoRef.current?.videoWidth && (
               <span className="ml-1">
@@ -766,7 +791,8 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
           {/* 🔧 NUEVO: Botón de pantalla completa */}
           <button
             onClick={toggleFullscreen}
-            className="absolute top-2 right-2 bg-black bg-opacity-50 hover:bg-opacity-75 text-white p-2 rounded transition-all"
+            aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+            className="absolute top-2 right-2 min-h-[44px] min-w-[44px] flex items-center justify-center bg-paper/90 hover:bg-mist text-ink rounded-small border border-faded transition-all"
             title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
           >
             {isFullscreen ? (
@@ -784,10 +810,10 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
         {/* Video local (picture-in-picture) con posición responsiva */}
         {showLocalVideo && (
           <div className={`absolute ${
-            containerDimensions.width < 768 
-              ? 'top-2 right-2 w-24 h-18' 
+            containerDimensions.width < 768
+              ? 'bottom-52 right-2 w-24 h-18'
               : 'top-4 right-4 w-64 h-48'
-          } bg-gray-800 rounded-lg overflow-hidden shadow-lg border-2 border-gray-600 z-30 relative`}>
+          } bg-mist rounded-card overflow-hidden shadow-photo border-2 border-ink/20 z-30 relative`}>
             <video
               ref={localVideoRef}
               autoPlay
@@ -806,8 +832,8 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
             />
             
             {!isVideoEnabled && (
-              <div className="absolute inset-0 bg-gray-700 flex items-center justify-center">
-                <VideoOff className={`${containerDimensions.width < 768 ? 'h-4 w-4' : 'h-8 w-8'} text-gray-400`} />
+              <div className="absolute inset-0 bg-faded flex items-center justify-center">
+                <VideoOff className={`${containerDimensions.width < 768 ? 'h-4 w-4' : 'h-8 w-8'} text-ink/60`} />
               </div>
             )}
 
@@ -816,22 +842,22 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
               <div className="absolute inset-0 pointer-events-none z-40">
                 <div className="relative w-full h-full">
                   {/* Barra de escaneo facial que baja */}
-                  <div 
-                    className="absolute left-0 right-0 h-1 bg-green-400 shadow-lg"
+                  <div
+                    className="absolute left-0 right-0 h-1 bg-iris shadow-lg"
                     style={{
                       animation: 'localFaceScan 3s ease-in-out infinite',
-                      boxShadow: '0 0 15px rgba(34, 197, 94, 0.8)'
+                      boxShadow: '0 0 15px rgba(43, 24, 155, 0.35)'
                     }}
                   />
                   {/* Overlay de escaneo */}
-                  <div className="absolute inset-0 bg-green-400 bg-opacity-20 border-2 border-green-400 border-dashed animate-pulse" />
+                  <div className="absolute inset-0 bg-iris/15 border-2 border-iris border-dashed animate-pulse" />
                   {/* Esquinas de escaneo */}
-                  <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-green-400"></div>
-                  <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-green-400"></div>
-                  <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-green-400"></div>
-                  <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-green-400"></div>
+                  <div className="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-iris"></div>
+                  <div className="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-iris"></div>
+                  <div className="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-iris"></div>
+                  <div className="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-iris"></div>
                   {/* Texto de escaneo */}
-                  <div className="absolute top-1 left-1 bg-green-600 bg-opacity-90 text-white px-2 py-1 rounded text-xs font-medium">
+                  <div className="absolute top-1 left-1 bg-iris text-paper px-2 py-1 rounded-small text-xs font-medium">
                     🔍 Siendo Escaneado
                   </div>
                 </div>
@@ -842,24 +868,24 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
               <div className="absolute inset-0 pointer-events-none z-40">
                 <div className="relative w-full h-full">
                   {/* Círculo pulsante para huella */}
-                  <div 
-                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-blue-400 rounded-full"
+                  <div
+                    className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-20 h-20 border-2 border-indigo rounded-full"
                     style={{
                       animation: 'localHandScan 3s ease-in-out infinite',
-                      boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)'
+                      boxShadow: '0 0 20px rgba(33, 19, 117, 0.35)'
                     }}
                   />
                   {/* Líneas de escaneo */}
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                    <div className="w-0.5 h-12 bg-blue-400 absolute -top-6 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
-                    <div className="w-0.5 h-12 bg-blue-400 absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
-                    <div className="h-0.5 w-12 bg-blue-400 absolute -left-6 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
-                    <div className="h-0.5 w-12 bg-blue-400 absolute -right-6 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
+                    <div className="w-0.5 h-12 bg-indigo absolute -top-6 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
+                    <div className="w-0.5 h-12 bg-indigo absolute -bottom-6 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
+                    <div className="h-0.5 w-12 bg-indigo absolute -left-6 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
+                    <div className="h-0.5 w-12 bg-indigo absolute -right-6 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
                   </div>
                   {/* Overlay de escaneo */}
-                  <div className="absolute inset-0 bg-blue-400 bg-opacity-20 animate-pulse" />
+                  <div className="absolute inset-0 bg-indigo/15 animate-pulse" />
                   {/* Texto de escaneo */}
-                  <div className="absolute top-1 left-1 bg-blue-600 bg-opacity-90 text-white px-2 py-1 rounded text-xs font-medium">
+                  <div className="absolute top-1 left-1 bg-indigo text-paper px-2 py-1 rounded-small text-xs font-medium">
                     👋 Siendo Escaneado
                   </div>
                 </div>
@@ -868,13 +894,13 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
             
             <div className="absolute top-2 left-2">
               <div className={`w-3 h-3 rounded-full ${
-                connectionState === 'peer_connected' || connectionState === 'ready' ? 'bg-green-500' : 'bg-red-500'
+                connectionState === 'peer_connected' || connectionState === 'ready' ? 'bg-iris' : 'bg-ink'
               }`}></div>
             </div>
-            
+
             <div className="absolute top-2 right-2">
-              <div className={`px-2 py-1 rounded text-xs font-medium ${
-                isGuest ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'
+              <div className={`px-2 py-1 rounded-small text-xs font-medium border ${
+                isGuest ? 'bg-paper text-ink border-faded' : 'bg-iris text-paper border-iris'
               }`}>
                 {isGuest ? 'Guest' : 'Host'}
               </div>
@@ -883,7 +909,8 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
             <div className="absolute bottom-2 right-2">
               <button
                 onClick={toggleLocalVideoVisibility}
-                className="bg-gray-800 bg-opacity-75 hover:bg-opacity-100 text-white p-1 rounded"
+                aria-label="Hide/Show local video"
+                className="bg-paper/90 hover:bg-mist text-ink border border-faded min-h-[44px] min-w-[44px] flex items-center justify-center p-1 rounded-small"
                 title="Hide/Show local video"
               >
                 <Eye className="h-4 w-4" />
@@ -896,7 +923,8 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
           <div className="absolute top-4 right-4 z-30">
             <button
               onClick={toggleLocalVideoVisibility}
-              className="bg-gray-800 bg-opacity-75 hover:bg-opacity-100 text-white p-3 rounded-lg"
+              aria-label="Show local video"
+              className="bg-paper/90 hover:bg-mist text-ink border border-faded min-h-[44px] min-w-[44px] flex items-center justify-center p-3 rounded-small"
               title="Show local video"
             >
               <Camera className="h-6 w-6" />
@@ -908,22 +936,22 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
         {faceScanning && (
           <div className="absolute inset-0 pointer-events-none z-20">
             <div className="relative w-full h-full">
-              <div 
-                className="absolute left-0 right-0 h-1 bg-green-400 shadow-lg"
+              <div
+                className="absolute left-0 right-0 h-1 bg-iris shadow-lg"
                 style={{
                   animation: 'faceScan 3s ease-in-out',
-                  boxShadow: '0 0 20px rgba(34, 197, 94, 0.8)'
+                  boxShadow: '0 0 20px rgba(43, 24, 155, 0.35)'
                 }}
               />
-              <div className="absolute inset-0 bg-green-400 bg-opacity-10 border-2 border-green-400 border-dashed animate-pulse" />
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 bg-opacity-90 text-white px-4 py-2 rounded-lg text-lg font-bold">
+              <div className="absolute inset-0 bg-iris/10 border-2 border-iris border-dashed animate-pulse" />
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-iris text-paper px-4 py-2 rounded-pill text-lg font-medium">
                 🔍 Escaneando Rostro...
               </div>
-              <div className="absolute bottom-32 left-4 right-4 bg-gray-800 bg-opacity-75 rounded-lg p-3">
-                <div className="text-green-400 text-sm mb-2">Análisis Facial en Progreso</div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-green-400 h-2 rounded-full"
+              <div className="absolute bottom-32 left-4 right-4 bg-paper/90 border border-faded rounded-card p-3">
+                <div className="text-iris text-sm font-medium mb-2">Análisis Facial en Progreso</div>
+                <div className="w-full bg-faded rounded-full h-2">
+                  <div
+                    className="bg-iris h-2 rounded-full"
                     style={{ animation: 'progressBar 3s ease-in-out' }}
                   ></div>
                 </div>
@@ -931,33 +959,33 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
             </div>
           </div>
         )}
-        
+
         {handScanning && (
           <div className="absolute inset-0 pointer-events-none z-20">
             <div className="relative w-full h-full">
-              <div 
-                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-40 border-4 border-blue-400 rounded-full"
+              <div
+                className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-40 border-4 border-indigo rounded-full"
                 style={{
                   animation: 'handScan 3s ease-in-out infinite',
-                  boxShadow: '0 0 30px rgba(59, 130, 246, 0.8)',
+                  boxShadow: '0 0 30px rgba(33, 19, 117, 0.35)',
                   marginTop: '-20px'
                 }}
               />
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" style={{ marginTop: '-20px' }}>
-                <div className="w-1 h-20 bg-blue-400 absolute -top-10 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
-                <div className="w-1 h-20 bg-blue-400 absolute -bottom-10 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
-                <div className="h-1 w-20 bg-blue-400 absolute -left-10 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
-                <div className="h-1 w-20 bg-blue-400 absolute -right-10 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
+                <div className="w-1 h-20 bg-indigo absolute -top-10 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
+                <div className="w-1 h-20 bg-indigo absolute -bottom-10 left-1/2 transform -translate-x-1/2 animate-pulse"></div>
+                <div className="h-1 w-20 bg-indigo absolute -left-10 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
+                <div className="h-1 w-20 bg-indigo absolute -right-10 top-1/2 transform -translate-y-1/2 animate-pulse"></div>
               </div>
-              <div className="absolute inset-0 bg-blue-400 bg-opacity-10" />
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 bg-opacity-90 text-white px-4 py-2 rounded-lg text-lg font-bold">
+              <div className="absolute inset-0 bg-indigo/10" />
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-indigo text-paper px-4 py-2 rounded-pill text-lg font-medium">
                 👋 Escaneando Mano...
               </div>
-              <div className="absolute bottom-32 left-4 right-4 bg-gray-800 bg-opacity-75 rounded-lg p-3">
-                <div className="text-blue-400 text-sm mb-2">Análisis Biométrico de Mano</div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-blue-400 h-2 rounded-full"
+              <div className="absolute bottom-32 left-4 right-4 bg-paper/90 border border-faded rounded-card p-3">
+                <div className="text-indigo text-sm font-medium mb-2">Análisis Biométrico de Mano</div>
+                <div className="w-full bg-faded rounded-full h-2">
+                  <div
+                    className="bg-indigo h-2 rounded-full"
                     style={{ animation: 'progressBar 3s ease-in-out' }}
                   ></div>
                 </div>
@@ -969,21 +997,21 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
         {/* 🔧 FIXED: Notificación de escaneo recibido - Mejorada con información del remitente */}
         {receivedNotification && (
           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50">
-            <div className={`bg-opacity-95 text-white px-10 py-8 rounded-xl shadow-2xl border-4 ${
-              receivedNotification.type === 'face_scan' ? 'bg-green-600 border-green-400' : 'bg-blue-600 border-blue-400'
+            <div className={`bg-paper/95 text-ink px-10 py-8 rounded-card shadow-photo border-4 ${
+              receivedNotification.type === 'face_scan' ? 'border-iris' : 'border-indigo'
             } animate-pulse max-w-md`}>
               <div className="text-center">
-                <div className="text-4xl mb-4">
+                <div className="text-4xl mb-4" aria-hidden="true">
                   {receivedNotification.type === 'face_scan' ? '🔍' : '👋'}
                 </div>
-                <div className="text-2xl font-bold mb-3">¡ALERTA DE ESCANEO!</div>
-                <div className="text-lg mb-2">{receivedNotification.message}</div>
+                <div className="font-display text-3xl mb-3">¡ALERTA DE ESCANEO!</div>
+                <div className="text-lg font-medium text-ink/80 mb-2">{receivedNotification.message}</div>
                 {receivedNotification.fromName && (
-                  <div className="text-sm opacity-80 mb-3">
+                  <div className="text-sm text-ink/60 mb-3">
                     De: {receivedNotification.fromName}
                   </div>
                 )}
-                <div className="text-base font-medium opacity-80">
+                <div className="text-base font-medium text-iris">
                   {receivedNotification.type === 'face_scan' ? 'Análisis facial en progreso...' : 'Análisis biométrico en progreso...'}
                 </div>
               </div>
@@ -993,222 +1021,238 @@ const EnhancedWebRTCRoom: React.FC<EnhancedWebRTCRoomProps> = ({ userName, roomI
 
         {/* Indicadores superiores */}
         <div className="absolute top-4 left-4 z-30">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium text-white ${getStateColor()}`}>
+          <div className={`px-3 py-1 rounded-pill text-sm font-medium text-white ${getStateColor()}`}>
             {getStateMessage()}
           </div>
         </div>
 
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30">
-          <div className="bg-gray-800 bg-opacity-75 px-3 py-1 rounded-full text-white text-sm flex items-center">
-            <Users className="h-4 w-4 mr-1" />
+          <div className="bg-paper/90 border border-faded px-3 py-1 rounded-pill text-ink text-sm font-medium flex items-center">
+            <Users className="h-4 w-4 mr-1" aria-hidden="true" />
             {participants.length || 1} participant{(participants.length || 1) !== 1 ? 's' : ''}
           </div>
         </div>
 
-        <div className="absolute top-16 left-4 z-30">
+        <div className="absolute top-56 right-4 z-30">
           <button
             onClick={() => {
               setShowDebug(!showDebug);
               if (!showDebug) handleGetDebugInfo();
             }}
-            className="bg-gray-800 bg-opacity-75 px-2 py-1 rounded text-white text-xs hover:bg-opacity-100"
+            aria-expanded={showDebug}
+            aria-label="Toggle diagnostics panel"
+            className="rounded-small focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30"
           >
-            {showDebug ? 'Hide' : 'Show'} Enhanced Debug
+            <Tag className="bg-paper/90 hover:bg-mist cursor-pointer">Diagnostics</Tag>
           </button>
         </div>
 
         {showDebug && debugInfo && (
-          <div className="absolute top-24 left-4 bg-gray-900 bg-opacity-95 p-3 rounded-lg max-w-md max-h-64 overflow-y-auto z-30">
-            <h4 className="text-white font-semibold mb-2 text-sm">Enhanced Debug Information:</h4>
-            <div className="text-gray-300 text-xs space-y-1">
-              <p>State: {connectionState}</p>
-              <p>Role: {isGuest ? 'Guest' : 'Host'}</p>
-              <p>Attempts: {debugInfo.connectionAttempts}</p>
-              <p>Local Stream: {debugInfo.hasLocalStream ? '✅' : '❌'}</p>
-              <p>Remote Stream: {debugInfo.hasRemoteStream ? '✅' : '❌'}</p>
-              <p>Socket: {debugInfo.isSocketConnected ? '✅' : '❌'}</p>
-              <p>Peer State: {debugInfo.peerConnectionState || 'none'}</p>
-              <p>ICE State: {debugInfo.iceConnectionState || 'none'}</p>
-              <p>🔧 Local Video Element: {localVideoRef.current?.srcObject ? '✅' : '❌'}</p>
-              <p>🔧 Local Video Playing: {localVideoRef.current && !localVideoRef.current.paused ? '✅' : '❌'}</p>
-              <p>🔧 Local Video Visible: {showLocalVideo ? '✅' : '❌'}</p>
-              <p>📢 Scan Callback: {debugInfo.scanNotificationCallback ? '✅' : '❌'}</p>
-              <p>📢 Notification: {receivedNotification ? `${receivedNotification.type} from ${receivedNotification.fromName}` : 'None'}</p>
-              <p>🎭 Receiving Face Scan: {receivingFaceScan ? '✅' : '❌'}</p>
-              <p>👋 Receiving Hand Scan: {receivingHandScan ? '✅' : '❌'}</p>
-              <p>📐 Container: {containerDimensions.width}x{containerDimensions.height}</p>
-              <p>📐 Video Aspect: {videoAspectRatio.toFixed(2)}</p>
-              <p>📐 Video Size: {videoDimensions.width} x {videoDimensions.height}</p>
-              <p>🖥️ Fullscreen: {isFullscreen ? '✅' : '❌'}</p>
-              {debugInfo.diagnostics && (
-                <div className="mt-2 pt-2 border-t border-gray-600">
-                  <p className="font-semibold">Diagnostics:</p>
-                  <p>Server: {debugInfo.diagnostics.serverReachable ? '✅' : '❌'}</p>
-                  <p>Socket: {debugInfo.diagnostics.socketConnected ? '✅' : '❌'}</p>
-                  <p>Room: {debugInfo.diagnostics.roomJoined ? '✅' : '❌'}</p>
-                  <p>Media: {debugInfo.diagnostics.mediaGranted ? '✅' : '❌'}</p>
-                  <p>Peer: {debugInfo.diagnostics.peerConnected ? '✅' : '❌'}</p>
-                  <p>ICE: {debugInfo.diagnostics.iceConnected ? '✅' : '❌'}</p>
-                </div>
-              )}
-            </div>
+          <div className="absolute top-64 right-4 z-30 w-80 max-w-[calc(100%-2rem)]">
+            <Card variant="mist" padding="sm" className="max-h-64 overflow-y-auto">
+              <h4 className="text-ink font-semibold mb-2 text-sm">Enhanced Debug Information:</h4>
+              <div className="text-ink text-xs space-y-1">
+                <p>State: {connectionState}</p>
+                <p>Role: {isGuest ? 'Guest' : 'Host'}</p>
+                <p>Attempts: {debugInfo.connectionAttempts}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.hasLocalStream ? 'bg-iris' : 'bg-ink'}`} />Local Stream: {debugInfo.hasLocalStream ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.hasRemoteStream ? 'bg-iris' : 'bg-ink'}`} />Remote Stream: {debugInfo.hasRemoteStream ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.isSocketConnected ? 'bg-iris' : 'bg-ink'}`} />Socket: {debugInfo.isSocketConnected ? 'Connected' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.peerConnectionState && !['failed', 'disconnected', 'closed'].includes(debugInfo.peerConnectionState) ? 'bg-iris' : 'bg-ink'}`} />Peer State: {debugInfo.peerConnectionState || '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.iceConnectionState && !['failed', 'disconnected', 'closed'].includes(debugInfo.iceConnectionState) ? 'bg-iris' : 'bg-ink'}`} />ICE State: {debugInfo.iceConnectionState || '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${localVideoRef.current?.srcObject ? 'bg-iris' : 'bg-ink'}`} />🔧 Local Video Element: {localVideoRef.current?.srcObject ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${localVideoRef.current && !localVideoRef.current.paused ? 'bg-iris' : 'bg-ink'}`} />🔧 Local Video Playing: {localVideoRef.current && !localVideoRef.current.paused ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${showLocalVideo ? 'bg-iris' : 'bg-ink'}`} />🔧 Local Video Visible: {showLocalVideo ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.scanNotificationCallback ? 'bg-iris' : 'bg-ink'}`} />📢 Scan Callback: {debugInfo.scanNotificationCallback ? 'On' : '—'}</p>
+                <p>📢 Notification: {receivedNotification ? `${receivedNotification.type} from ${receivedNotification.fromName}` : 'None'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${receivingFaceScan ? 'bg-iris' : 'bg-ink'}`} />🎭 Receiving Face Scan: {receivingFaceScan ? 'On' : '—'}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${receivingHandScan ? 'bg-iris' : 'bg-ink'}`} />👋 Receiving Hand Scan: {receivingHandScan ? 'On' : '—'}</p>
+                <p>📐 Container: {containerDimensions.width}x{containerDimensions.height}</p>
+                <p>📐 Video Aspect: {videoAspectRatio.toFixed(2)}</p>
+                <p>📐 Video Size: {videoDimensions.width} x {videoDimensions.height}</p>
+                <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${isFullscreen ? 'bg-iris' : 'bg-ink'}`} />🖥️ Fullscreen: {isFullscreen ? 'On' : '—'}</p>
+                {debugInfo.diagnostics && (
+                  <div className="mt-2 pt-2 border-t border-faded">
+                    <p className="font-semibold">Diagnostics:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.serverReachable ? 'bg-iris' : 'bg-ink'}`} />Server: {debugInfo.diagnostics.serverReachable ? 'Reachable' : '—'}</p>
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.socketConnected ? 'bg-iris' : 'bg-ink'}`} />Socket: {debugInfo.diagnostics.socketConnected ? 'Connected' : '—'}</p>
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.roomJoined ? 'bg-iris' : 'bg-ink'}`} />Room: {debugInfo.diagnostics.roomJoined ? 'Joined' : '—'}</p>
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.mediaGranted ? 'bg-iris' : 'bg-ink'}`} />Media: {debugInfo.diagnostics.mediaGranted ? 'Granted' : '—'}</p>
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.peerConnected ? 'bg-iris' : 'bg-ink'}`} />Peer: {debugInfo.diagnostics.peerConnected ? 'Connected' : '—'}</p>
+                      <p><span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full mr-1 ${debugInfo.diagnostics.iceConnected ? 'bg-iris' : 'bg-ink'}`} />ICE: {debugInfo.diagnostics.iceConnected ? 'Connected' : '—'}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         )}
 
         {['media_ready', 'ready'].includes(connectionState) && !remoteStream && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50 z-10">
-            <div className="text-center text-white">
-              <Users className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-xl">Waiting for other participants...</p>
-              <p className="text-sm text-gray-400 mt-2">Share the room code to invite others</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-paper/70 z-10">
+            <div className="text-center text-ink">
+              <Users className="h-16 w-16 mx-auto mb-4 text-ink/40" aria-hidden="true" />
+              <p className="font-display text-3xl">Waiting for other participants...</p>
+              <p className="text-sm font-medium text-ink/60 mt-2">Share the room code to invite others</p>
             </div>
           </div>
         )}
       </div>
 
       {/* Barra de controles fija */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gray-800 bg-opacity-95 backdrop-blur-sm px-6 py-4 z-40">
-        <div className="text-center mb-3">
-          <span className="text-gray-300 text-sm">Room ID: </span>
-          <span className="text-white font-mono bg-gray-700 px-2 py-1 rounded text-sm">{roomId}</span>
-        </div>
-        
-        <div className="flex items-center justify-center space-x-6">
-          <button
-            onClick={handleForceLocalVideo}
-            disabled={forceLocalVideoVisible}
-            className={`p-4 rounded-full transition-all duration-200 ${
-              forceLocalVideoVisible 
-                ? 'bg-orange-600 animate-pulse text-white' 
-                : 'bg-orange-600 hover:bg-orange-700 text-white hover:scale-105'
-            } disabled:opacity-75`}
-            title="Forzar video local"
-          >
-            <Wrench className="h-6 w-6" />
-          </button>
+      <div className="absolute bottom-0 left-0 right-0 z-40 px-4 pb-4 pt-2">
+        <Card variant="paper" padding="sm" elevated className="!rounded-pill w-full md:max-w-3xl md:mx-auto">
+          <div className="text-center mb-2">
+            <span className="text-ink/60 text-sm font-medium">Room ID: </span>
+            <span className="text-ink font-mono bg-mist border border-faded px-2 py-1 rounded-small text-sm">{roomId}</span>
+          </div>
 
-          <div className="h-8 w-px bg-gray-600"></div>
+          <div className="flex items-center justify-center flex-wrap gap-3 md:gap-4">
+            <button
+              onClick={handleForceLocalVideo}
+              disabled={forceLocalVideoVisible}
+              aria-label="Forzar video local"
+              className={`p-4 rounded-full transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 ${
+                forceLocalVideoVisible
+                  ? 'bg-faded animate-pulse text-ink'
+                  : 'bg-mist hover:bg-faded text-ink'
+              } disabled:opacity-75`}
+              title="Forzar video local"
+            >
+              <Wrench className="h-6 w-6" aria-hidden="true" />
+            </button>
 
-          <button
-            onClick={handleToggleAudio}
-            className={`p-4 rounded-full transition-all duration-200 ${
-              isAudioEnabled 
-                ? 'bg-gray-600 hover:bg-gray-700 text-white' 
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isAudioEnabled ? 'Silenciar micrófono' : 'Activar micrófono'}
-          >
-            {isAudioEnabled ? (
-              <Mic className="h-6 w-6" />
-            ) : (
-              <MicOff className="h-6 w-6" />
+            <div className="h-8 w-px bg-faded" aria-hidden="true"></div>
+
+            <button
+              onClick={handleToggleAudio}
+              aria-pressed={isAudioEnabled}
+              aria-label={isAudioEnabled ? 'Silenciar micrófono' : 'Activar micrófono'}
+              className={`p-4 rounded-full transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 ${
+                isAudioEnabled
+                  ? 'bg-paper text-ink border border-faded hover:bg-mist'
+                  : 'bg-faded text-ink hover:bg-faded/80'
+              }`}
+              title={isAudioEnabled ? 'Silenciar micrófono' : 'Activar micrófono'}
+            >
+              {isAudioEnabled ? (
+                <Mic className="h-6 w-6" aria-hidden="true" />
+              ) : (
+                <MicOff className="h-6 w-6" aria-hidden="true" />
+              )}
+            </button>
+
+            <button
+              onClick={handleToggleVideo}
+              aria-pressed={isVideoEnabled}
+              aria-label={isVideoEnabled ? 'Apagar cámara' : 'Encender cámara'}
+              className={`p-4 rounded-full transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30 ${
+                isVideoEnabled
+                  ? 'bg-paper text-ink border border-faded hover:bg-mist'
+                  : 'bg-faded text-ink hover:bg-faded/80'
+              }`}
+              title={isVideoEnabled ? 'Apagar cámara' : 'Encender cámara'}
+            >
+              {isVideoEnabled ? (
+                <Video className="h-6 w-6" aria-hidden="true" />
+              ) : (
+                <VideoOff className="h-6 w-6" aria-hidden="true" />
+              )}
+            </button>
+
+            <div className="h-8 w-px bg-faded" aria-hidden="true"></div>
+
+            {/* Botones de escaneo - SOLO PARA HOST */}
+            {!isGuest && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleFaceScan}
+                  disabled={faceScanning}
+                  aria-busy={faceScanning}
+                  aria-label="Escanear rostro"
+                  title="Escanear rostro"
+                  className={`min-h-[44px] min-w-[44px] ${faceScanning ? 'animate-pulse' : ''}`}
+                >
+                  <Scan className="h-6 w-6" aria-hidden="true" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleHandScan}
+                  disabled={handScanning}
+                  aria-busy={handScanning}
+                  aria-label="Escanear mano"
+                  title="Escanear mano"
+                  className={`min-h-[44px] min-w-[44px] ${handScanning ? 'animate-pulse' : ''}`}
+                >
+                  <Fingerprint className="h-6 w-6" aria-hidden="true" />
+                </Button>
+              </>
             )}
-          </button>
 
-          <button
-            onClick={handleToggleVideo}
-            className={`p-4 rounded-full transition-all duration-200 ${
-              isVideoEnabled 
-                ? 'bg-gray-600 hover:bg-gray-700 text-white' 
-                : 'bg-red-600 hover:bg-red-700 text-white'
-            }`}
-            title={isVideoEnabled ? 'Apagar cámara' : 'Encender cámara'}
-          >
-            {isVideoEnabled ? (
-              <Video className="h-6 w-6" />
-            ) : (
-              <VideoOff className="h-6 w-6" />
+            <div className="h-8 w-px bg-faded" aria-hidden="true"></div>
+
+            <button
+              onClick={handleGetDebugInfo}
+              aria-label="Información de debug"
+              className="p-4 rounded-full bg-mist hover:bg-faded text-ink transition-all duration-200 min-h-[44px] min-w-[44px] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris/30"
+              title="Información de debug"
+            >
+              <Eye className="h-6 w-6" aria-hidden="true" />
+            </button>
+
+            <Button
+              variant="outline"
+              onClick={handleEndCall}
+              aria-label="End call"
+              title="Colgar llamada"
+            >
+              <PhoneOff className="h-5 w-5" aria-hidden="true" />
+              End call
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-center flex-wrap gap-x-4 gap-y-1 mt-2 text-sm font-medium text-ink/60">
+            <div className="flex items-center space-x-1">
+              <div className={`w-2 h-2 rounded-full ${
+                ['peer_connected', 'ready'].includes(connectionState) ? 'bg-iris' : 'bg-ink'
+              }`} aria-hidden="true"></div>
+              <span>Conexión</span>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <div className={`w-2 h-2 rounded-full ${
+                isGuest ? 'bg-ink/40' : 'bg-iris'
+              }`} aria-hidden="true"></div>
+              <span>{isGuest ? 'Invitado' : 'Anfitrión'}</span>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <div className={`w-2 h-2 rounded-full ${
+                showLocalVideo ? 'bg-iris' : 'bg-ink'
+              }`} aria-hidden="true"></div>
+              <span>Video Local</span>
+            </div>
+
+            {(faceScanning || handScanning) && (
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-iris animate-pulse" aria-hidden="true"></div>
+                <span>Escaneando...</span>
+              </div>
             )}
-          </button>
 
-          <div className="h-8 w-px bg-gray-600"></div>
-
-         {/* Botones de escaneo - SOLO PARA HOST */}
-{!isGuest && (
-  <>
-    <button
-      onClick={handleFaceScan}
-      disabled={faceScanning}
-      className={`p-4 rounded-full transition-all duration-200 ${
-        faceScanning 
-          ? 'bg-green-600 animate-pulse text-white' 
-          : 'bg-green-600 hover:bg-green-700 text-white hover:scale-105'
-      } disabled:opacity-75`}
-      title="Escanear rostro"
-    >
-      <Scan className="h-6 w-6" />
-    </button>
-
-    <button
-      onClick={handleHandScan}
-      disabled={handScanning}
-      className={`p-4 rounded-full transition-all duration-200 ${
-        handScanning 
-          ? 'bg-blue-600 animate-pulse text-white' 
-          : 'bg-blue-600 hover:bg-blue-700 text-white hover:scale-105'
-      } disabled:opacity-75`}
-      title="Escanear mano"
-    >
-      <Fingerprint className="h-6 w-6" />
-    </button>
-  </>
-)}
-
-<div className="h-8 w-px bg-gray-600"></div>
-
-          <button
-            onClick={handleGetDebugInfo}
-            className="p-4 rounded-full bg-purple-600 hover:bg-purple-700 text-white transition-all duration-200 hover:scale-105"
-            title="Información de debug"
-          >
-            <Eye className="h-6 w-6" />
-          </button>
-
-          <button
-            onClick={handleEndCall}
-            className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white transition-all duration-200 hover:scale-105"
-            title="Colgar llamada"
-          >
-            <Phone className="h-6 w-6 transform rotate-135" />
-          </button>
-        </div>
-
-        <div className="flex items-center justify-center mt-3 space-x-4 text-sm text-gray-400">
-          <div className="flex items-center space-x-1">
-            <div className={`w-2 h-2 rounded-full ${
-              ['peer_connected', 'ready'].includes(connectionState) ? 'bg-green-500' : 'bg-red-500'
-            }`}></div>
-            <span>Conexión</span>
+            {(receivingFaceScan || receivingHandScan || receivedNotification) && (
+              <div className="flex items-center space-x-1">
+                <div className="w-2 h-2 rounded-full bg-indigo animate-pulse" aria-hidden="true"></div>
+                <span>Siendo Escaneado</span>
+              </div>
+            )}
           </div>
-          
-          <div className="flex items-center space-x-1">
-            <div className={`w-2 h-2 rounded-full ${
-              isGuest ? 'bg-blue-500' : 'bg-purple-500'
-            }`}></div>
-            <span>{isGuest ? 'Invitado' : 'Anfitrión'}</span>
-          </div>
-
-          <div className="flex items-center space-x-1">
-            <div className={`w-2 h-2 rounded-full ${
-              showLocalVideo ? 'bg-green-500' : 'bg-gray-500'
-            }`}></div>
-            <span>Video Local</span>
-          </div>
-          
-          {(faceScanning || handScanning) && (
-            <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-              <span>Escaneando...</span>
-            </div>
-          )}
-
-          {(receivingFaceScan || receivingHandScan || receivedNotification) && (
-            <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-              <span>Siendo Escaneado</span>
-            </div>
-          )}
-        </div>
+        </Card>
       </div>
 
       <style jsx>{`
